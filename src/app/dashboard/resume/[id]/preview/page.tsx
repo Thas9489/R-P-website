@@ -1,0 +1,147 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+import Link from 'next/link'
+import { motion } from 'framer-motion'
+import { toast } from 'sonner'
+import type { Resume } from '@/types'
+import { ResumePreview } from '@/components/resume/ResumePreview'
+
+type LoadState = 'loading' | 'loaded' | 'error'
+
+export default function ResumePreviewPage() {
+  const params = useParams()
+  const id = params.id as string
+
+  const [resume, setResume] = useState<Resume | null>(null)
+  const [loadState, setLoadState] = useState<LoadState>('loading')
+
+  useEffect(() => {
+    if (!id) return
+    fetch(`/api/resumes/${id}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Not found')
+        return res.json()
+      })
+      .then(({ resume: r }) => {
+        setResume({
+          id: r.id,
+          title: r.title,
+          template: r.template,
+          data: r.data,
+          userId: r.userId,
+          isPublic: r.isPublic,
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt,
+        })
+        setLoadState('loaded')
+      })
+      .catch(() => {
+        setLoadState('error')
+        toast.error('Failed to load resume preview')
+      })
+  }, [id])
+
+  const handlePrint = () => {
+    window.print()
+  }
+
+  if (loadState === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-950">
+        <div className="flex flex-col items-center gap-4">
+          <svg className="w-10 h-10 animate-spin text-blue-600" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Loading preview…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (loadState === 'error' || !resume) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-950 px-4">
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Failed to load preview</h2>
+          <Link
+            href="/dashboard/resume"
+            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            Back to resumes
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-200 dark:bg-gray-950 print:bg-white">
+      {/* Floating toolbar — hidden when printing */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="fixed top-4 right-4 z-50 flex items-center gap-2 print:hidden"
+      >
+        <div className="flex items-center gap-2 bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 px-3 py-2">
+          {/* Back */}
+          <Link
+            href={`/dashboard/resume/${id}`}
+            className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="19" y1="12" x2="5" y2="12" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+            Edit
+          </Link>
+
+          <div className="w-px h-5 bg-gray-200 dark:bg-gray-700" />
+
+          {/* Print */}
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="6 9 6 2 18 2 18 9" />
+              <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
+              <rect x="6" y="14" width="12" height="8" />
+            </svg>
+            Print
+          </button>
+
+          <div className="w-px h-5 bg-gray-200 dark:bg-gray-700" />
+
+          {/* Download PDF */}
+          <a
+            href={`/api/resumes/${id}/export`}
+            download={`${resume.title}.pdf`}
+            className="flex items-center gap-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download PDF
+          </a>
+        </div>
+      </motion.div>
+
+      {/* Preview area */}
+      <div className="py-12 px-4 flex justify-center print:py-0 print:px-0">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="w-full max-w-[800px] bg-white shadow-2xl print:shadow-none print:max-w-full"
+        >
+          <ResumePreview resumeData={resume.data} template={resume.template} />
+        </motion.div>
+      </div>
+    </div>
+  )
+}
