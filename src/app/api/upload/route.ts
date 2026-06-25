@@ -1,46 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { uploadImage } from '@/lib/cloudinary'
+import { getServerSupabase } from '@/lib/supabase'
+
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+const MAX_SIZE = 5 * 1024 * 1024 // 5 MB
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const formData = await req.formData()
-    const file = formData.get('file') as File
-    const type = (formData.get('type') as string) || 'profile'
+    const file = formData.get('file') as File | null
+    const type = (formData.get('type') as string) ?? 'profile'
 
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+    if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      return NextResponse.json({ error: 'Only JPEG, PNG, WebP or GIF images are allowed' }, { status: 400 })
+    }
+    if (file.size > MAX_SIZE) {
+      return NextResponse.json({ error: 'File exceeds 5 MB limit' }, { status: 400 })
     }
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-    if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json({ error: 'Only images are allowed (JPEG, PNG, WebP, GIF)' }, { status: 400 })
-    }
-
-    const maxSize = type === 'profile' ? 2 * 1024 * 1024 : 5 * 1024 * 1024
-    if (file.size > maxSize) {
-      return NextResponse.json(
-        { error: `File too large. Max ${type === 'profile' ? '2MB' : '5MB'}` },
-        { status: 400 }
-      )
-    }
+    const ext = file.name.split('.').pop() ?? 'jpg'
+    const path = `${session.user.id}/${type}/${Date.now()}.${ext}`
 
     const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    const base64 = `data:${file.type};base64,${buffer.toString('base64')}`
+    const supabase = getServerSupabase()
 
-    const folder = `resume-builder/${session.user.id}/${type}`
-    const { url, publicId } = await uploadImage(base64, folder)
+    const { error: uploadError } = await supabase.storage
+      .from('profile-images')
+      .upload(path, bytes, { contentType: file.type, upsert: true })
 
-    return NextResponse.json({ url, publicId })
-  } catch (error) {
-    console.error('[UPLOAD]', error)
+    if (uploadError) {
+      console.error('[UPLOAD] Supabase storage error:', uploadError)
+      return NextResponse.json({ error: 'Upload failed: ' + uploadError.message }, { status: 500 })
+    }
+
+    const { data } = supabase.storage.from('profile-images').getPublicUrl(path)
+    return NextResponse.json({ url: data.publicUrl, path })
+  } catch (err) {
+    console.error('[UPLOAD]', err)
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
   }
 }

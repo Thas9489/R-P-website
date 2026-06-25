@@ -12,45 +12,26 @@ export default async function DashboardPage() {
 
   const userId = session.user.id;
 
-  // Parallel data fetching
-  const [resumes, savedJobs, portfolio] = await Promise.all([
-    db.resume.findMany({
-      where: { userId },
-      orderBy: { updatedAt: 'desc' },
-      take: 10,
-      select: {
-        id: true,
-        title: true,
-        template: true,
-        updatedAt: true,
-        createdAt: true,
-      },
-    }),
-    db.savedJob.count({ where: { userId } }),
-    db.portfolio.findUnique({
-      where: { userId },
-      select: { views: true, slug: true },
-    }),
+  const [resumes, savedJobCount, portfolio, user] = await Promise.all([
+    db.resume.findMany(userId),
+    db.savedJob.count(userId),
+    db.portfolio.findByUserId(userId),
+    db.user.findById(userId),
   ]);
-
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    select: { credits: true, image: true, name: true, email: true },
-  });
 
   return (
     <DashboardClient
       userName={session.user.name ?? 'there'}
       userImage={session.user.image ?? null}
-      credits={user?.credits ?? session.user.credits ?? 0}
-      resumes={resumes.map((r) => ({
+      credits={(user?.credits as number) ?? session.user.credits ?? 0}
+      resumes={resumes.slice(0, 10).map((r) => ({
         id: r.id,
         title: r.title,
         template: r.template,
-        updatedAt: r.updatedAt.toISOString(),
+        updatedAt: r.updatedAt,
       }))}
       resumeCount={resumes.length}
-      savedJobCount={savedJobs}
+      savedJobCount={savedJobCount}
       portfolioViews={portfolio?.views ?? 0}
       portfolioSlug={portfolio?.slug ?? null}
     />

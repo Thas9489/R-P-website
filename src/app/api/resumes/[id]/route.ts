@@ -3,10 +3,10 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
 
-async function getResumeAndVerify(id: string, userId: string) {
-  const resume = await db.resume.findUnique({ where: { id } })
-  if (!resume) return { error: 'Not found', status: 404 }
-  if (resume.userId !== userId) return { error: 'Forbidden', status: 403 }
+async function guard(id: string, userId: string) {
+  const resume = await db.resume.findById(id)
+  if (!resume) return { error: 'Not found', status: 404 as const }
+  if (resume.userId !== userId) return { error: 'Forbidden', status: 403 as const }
   return { resume }
 }
 
@@ -14,13 +14,11 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const { resume, error, status } = await getResumeAndVerify(params.id, session.user.id)
+    const { resume, error, status } = await guard(params.id, session.user.id)
     if (error) return NextResponse.json({ error }, { status })
-
     return NextResponse.json({ resume })
-  } catch (error) {
-    console.error('[RESUME_GET]', error)
+  } catch (err) {
+    console.error('[RESUME_GET]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -29,26 +27,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const { resume, error, status } = await getResumeAndVerify(params.id, session.user.id)
+    const { error, status } = await guard(params.id, session.user.id)
     if (error) return NextResponse.json({ error }, { status })
 
-    const body = await req.json()
-    const { title, template, data } = body
-
-    const updated = await db.resume.update({
-      where: { id: params.id },
-      data: {
-        ...(title && { title }),
-        ...(template && { template }),
-        ...(data && { data }),
-        updatedAt: new Date(),
-      },
-    })
-
+    const { title, template, data } = await req.json()
+    const updated = await db.resume.update(params.id, { title, template, data })
     return NextResponse.json({ resume: updated })
-  } catch (error) {
-    console.error('[RESUME_PUT]', error)
+  } catch (err) {
+    console.error('[RESUME_PUT]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -57,15 +43,12 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const { error, status } = await getResumeAndVerify(params.id, session.user.id)
+    const { error, status } = await guard(params.id, session.user.id)
     if (error) return NextResponse.json({ error }, { status })
-
-    await db.resume.delete({ where: { id: params.id } })
-
+    await db.resume.delete(params.id)
     return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error('[RESUME_DELETE]', error)
+  } catch (err) {
+    console.error('[RESUME_DELETE]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

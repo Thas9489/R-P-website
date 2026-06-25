@@ -8,13 +8,9 @@ export async function GET() {
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const [user, logs] = await Promise.all([
-    db.user.findUnique({ where: { id: session.user.id }, select: { credits: true } }),
-    db.creditLog.findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    }),
+    db.user.findById(session.user.id),
+    db.creditLog.findMany(session.user.id),
   ])
 
-  return NextResponse.json({ credits: user?.credits || 0, logs })
+  return NextResponse.json({ credits: (user?.credits as number) ?? 0, logs })
 }

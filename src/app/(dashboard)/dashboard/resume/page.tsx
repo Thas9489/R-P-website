@@ -10,20 +10,7 @@ import type { Resume } from '@/types'
 export const metadata = { title: 'My Resumes' }
 
 async function getResumes(userId: string): Promise<Resume[]> {
-  const rows = await db.resume.findMany({
-    where: { userId },
-    orderBy: { updatedAt: 'desc' },
-  })
-  return rows.map((r) => ({
-    id: r.id,
-    title: r.title,
-    template: r.template as Resume['template'],
-    data: r.data as unknown as Resume['data'],
-    userId: r.userId,
-    isPublic: r.isPublic,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-  }))
+  return db.resume.findMany(userId)
 }
 
 export default async function ResumesPage() {

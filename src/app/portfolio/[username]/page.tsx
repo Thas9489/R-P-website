@@ -16,23 +16,10 @@ import CreativeTheme from '@/components/portfolio/themes/CreativeTheme'
 
 async function getPortfolio(username: string) {
   try {
-    const portfolio = await db.portfolio.findUnique({
-      where: { slug: username },
-      include: {
-        resume: true,
-        user: {
-          select: { name: true, email: true, image: true, username: true },
-        },
-      },
-    })
-
+    const portfolio = await db.portfolio.findBySlug(username)
     if (!portfolio || !portfolio.isPublic) return null
-
     // Increment views (fire and forget)
-    db.portfolio
-      .update({ where: { id: portfolio.id }, data: { views: { increment: 1 } } })
-      .catch(() => {})
-
+    db.portfolio.incrementViews(portfolio.id).catch(() => {})
     return portfolio
   } catch {
     return null
@@ -52,8 +39,8 @@ export async function generateMetadata({
     return { title: 'Portfolio Not Found' }
   }
 
-  const resumeData = portfolio.resume?.data as unknown as ResumeData | undefined
-  const name = resumeData?.personalInfo?.name || portfolio.user?.name || params.username
+  const resumeData = portfolio.resume?.data as ResumeData | undefined
+  const name = resumeData?.personalInfo?.name || params.username
   const summary = resumeData?.summary || `${name}'s professional portfolio`
 
   return {
@@ -112,7 +99,7 @@ export default async function PublicPortfolioPage({
     notFound()
   }
 
-  const resumeData = portfolio.resume?.data as unknown as ResumeData
+  const resumeData = portfolio.resume?.data as ResumeData
   const theme = (portfolio.theme || 'modern') as PortfolioTheme
 
   return (
