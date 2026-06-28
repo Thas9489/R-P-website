@@ -52,22 +52,45 @@ export default function ResumePreviewPage() {
     if (!resume) return
     setPdfLoading(true)
     try {
-      const React = (await import('react')).default
-      const { pdf } = await import('@react-pdf/renderer')
-      const { ResumePDFDocument } = await import('@/components/resume/ResumePDFDocument')
+      const { default: html2pdf } = await import('html2pdf.js')
 
-      const element = React.createElement(ResumePDFDocument, { resumeData: resume.data })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const blob = await pdf(element as any).toBlob()
+      const source = document.getElementById('resume-preview-root')
+      if (!source) throw new Error('Resume preview element not found')
 
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${resume.title.replace(/[^a-z0-9]/gi, '_')}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      // Clone at natural (un-scaled) size so the PDF matches the on-screen template
+      const clone = source.cloneNode(true) as HTMLElement
+      clone.style.cssText = `
+        transform: none !important;
+        width: 595px;
+        min-height: 842px;
+        position: absolute;
+        left: -9999px;
+        top: 0;
+        background: #fff;
+        box-shadow: none;
+        overflow: visible;
+      `
+      document.body.appendChild(clone)
+
+      await html2pdf()
+        .set({
+          margin: 0,
+          filename: `${resume.title.replace(/[^a-z0-9]/gi, '_')}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+            width: 595,
+            windowWidth: 595,
+          },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        })
+        .from(clone)
+        .save()
+
+      document.body.removeChild(clone)
     } catch (err) {
       console.error('PDF generation failed:', err)
       toast.error('PDF generation failed — opening print dialog instead')
