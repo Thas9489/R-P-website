@@ -16,9 +16,7 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const user = await db.user.findById(session.user.id)
-    if (!user || (user.credits as number) < 1) {
-      return NextResponse.json({ error: 'Insufficient credits. Please upgrade your plan.' }, { status: 402 })
-    }
+    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
     const { type, context, resumeData } = await req.json()
     let result = ''

@@ -78,7 +78,7 @@ export const db = {
       const sb = getServerSupabase()
       const { data, error } = await sb
         .from('users')
-        .insert({ ...input, credits: 10 })
+        .insert({ ...input, credits: 999 })
         .select()
         .single()
       if (error) throw error

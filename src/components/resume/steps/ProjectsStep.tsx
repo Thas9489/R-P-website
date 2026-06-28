@@ -110,7 +110,7 @@ export default function ProjectsStep() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'project',
-          context: `Project: ${form.name}, Technologies: ${form.technologies.join(', ')}`,
+          context: JSON.stringify({ name: form.name, technologies: form.technologies }),
           resumeData: { projects: resumeData.projects },
         }),
       })
