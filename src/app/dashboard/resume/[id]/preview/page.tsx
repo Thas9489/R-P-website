@@ -59,18 +59,6 @@ export default function ResumePreviewPage() {
       return
     }
 
-    // Save and strip the scale transform so html2canvas captures at true 595px size.
-    // The pdfLoading overlay covers the brief layout shift.
-    const savedTransform = source.style.transform
-    const savedBoxShadow = source.style.boxShadow
-    source.style.transform = 'none'
-    source.style.boxShadow = 'none'
-
-    // Wait two frames so the browser repaints before html2canvas reads the DOM
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-    })
-
     try {
       const { default: html2pdf } = await import('html2pdf.js')
 
@@ -87,8 +75,28 @@ export default function ResumePreviewPage() {
             logging: false,
             width: 595,
             windowWidth: 595,
+            // Modify the internal html2canvas clone — never touches the real DOM,
+            // so there is zero visual flash or layout shift on screen
+            onclone: (clonedDoc: Document) => {
+              const el = clonedDoc.getElementById('resume-preview-root')
+              if (!el) return
+              // Remove the scale transform so the clone renders at natural 595 × 842px
+              el.style.transform = 'none'
+              el.style.boxShadow = 'none'
+              // Allow content taller than one page to overflow and be captured fully
+              el.style.overflow = 'visible'
+              el.style.minHeight = 'auto'
+              // Also let the outer container grow so it doesn't clip the resume
+              const parent = el.parentElement
+              if (parent) {
+                parent.style.height = 'auto'
+                parent.style.overflow = 'visible'
+              }
+            },
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          // Prevent mid-element page breaks — moves whole blocks to the next page
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
         })
         .from(source)
         .save()
@@ -97,9 +105,6 @@ export default function ResumePreviewPage() {
       toast.error('PDF generation failed — opening print dialog instead')
       handlePrint()
     } finally {
-      // Always restore styles, even if PDF generation threw
-      source.style.transform = savedTransform
-      source.style.boxShadow = savedBoxShadow
       setPdfLoading(false)
     }
   }
