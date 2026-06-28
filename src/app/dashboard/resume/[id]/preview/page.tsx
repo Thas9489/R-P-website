@@ -16,7 +16,7 @@ export default function ResumePreviewPage() {
 
   const [resume, setResume] = useState<Resume | null>(null)
   const [loadState, setLoadState] = useState<LoadState>('loading')
-  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfOpen, setPdfOpen] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -48,73 +48,66 @@ export default function ResumePreviewPage() {
     window.print()
   }
 
-  const handleDownloadPdf = async () => {
+  const handleDownloadPdf = () => {
     if (!resume) return
-    setPdfLoading(true)
 
     const source = document.getElementById('resume-preview-root')
     if (!source) {
       toast.error('Resume not ready — please wait a moment')
-      setPdfLoading(false)
       return
     }
 
-    // scrollHeight includes content hidden by overflow:hidden, so it gives
-    // the true content height for multi-page resumes
-    const contentHeight = source.scrollHeight
+    // Clone the live element so we can modify styles without touching the preview
+    const clone = source.cloneNode(true) as HTMLElement
+    clone.style.transform = 'none'
+    clone.style.boxShadow = 'none'
+    clone.style.overflow = 'visible'
+    clone.style.width = '595px'
+    clone.style.position = 'relative'
 
-    try {
-      const { default: html2pdf } = await import('html2pdf.js')
+    // Carry every stylesheet so web fonts and CSS variables render identically
+    const styleSheets = Array.from(
+      document.querySelectorAll('link[rel="stylesheet"], style')
+    )
+      .map((el) => (el as HTMLElement).outerHTML)
+      .join('\n')
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (html2pdf() as any)
-        .set({
-          margin: 0,
-          filename: `${resume.title.replace(/[^a-z0-9]/gi, '_')}.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: {
-            scale: 2,
-            useCORS: true,
-            allowTaint: true,
-            logging: false,
-            // Capture exactly the resume width — prevents white space on the right
-            width: 595,
-            height: contentHeight,
-            // Correct for any page scroll so the element position is computed right
-            scrollX: -window.scrollX,
-            scrollY: -window.scrollY,
-            onclone: (_doc: Document, el: HTMLElement) => {
-              // Remove the scale transform so html2canvas sees the element at
-              // its natural 595 px width — no zoom, no cropping
-              el.style.transform = 'none'
-              el.style.boxShadow = 'none'
-              // position:relative keeps absolutely-positioned children anchored
-              // to the resume element, not the page
-              el.style.position = 'relative'
-              // overflow:visible lets multi-page content render in full height
-              el.style.overflow = 'visible'
-              el.style.width = '595px'
-              // Free the parent container so it doesn't clip the element height
-              const parent = el.parentElement
-              if (parent) {
-                parent.style.height = 'auto'
-                parent.style.overflow = 'visible'
-              }
-            },
-          },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          // Avoid cutting through a block mid-element — shift it to the next page
-          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-        })
-        .from(source)
-        .save()
-    } catch (err) {
-      console.error('PDF generation failed:', err)
-      toast.error('PDF generation failed — opening print dialog instead')
-      handlePrint()
-    } finally {
-      setPdfLoading(false)
+    const printWindow = window.open('', '_blank', 'width=660,height=900')
+    if (!printWindow) {
+      toast.error('Allow pop-ups to download PDF, then try again')
+      return
     }
+
+    setPdfOpen(true)
+
+    const safeName = resume.title.replace(/[^a-z0-9]/gi, '_')
+    printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${safeName}</title>
+  ${styleSheets}
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 595px; background: white; }
+    @page { size: A4; margin: 0; }
+    body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  </style>
+</head>
+<body>${clone.outerHTML}</body>
+</html>`)
+    printWindow.document.close()
+
+    const triggerPrint = () => {
+      try { printWindow.focus(); printWindow.print() } catch { /* ignore */ }
+    }
+
+    printWindow.addEventListener('load', () => setTimeout(triggerPrint, 400))
+    // Fallback: load event may have fired before listener was attached
+    setTimeout(triggerPrint, 1800)
+
+    printWindow.addEventListener('afterprint', () => setPdfOpen(false))
+    setTimeout(() => setPdfOpen(false), 5000)
   }
 
   if (loadState === 'loading') {
@@ -149,16 +142,10 @@ export default function ResumePreviewPage() {
 
   return (
     <div className="min-h-screen bg-gray-200 dark:bg-gray-950 print:bg-white">
-      {/* Full-screen overlay while PDF is generating — hides the transform removal flash */}
-      {pdfLoading && (
-        <div className="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center print:hidden">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl px-8 py-6 flex items-center gap-3 shadow-2xl">
-            <svg className="w-5 h-5 animate-spin text-indigo-600" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Generating PDF…</span>
-          </div>
+      {/* Toast-style hint while the print window is open */}
+      {pdfOpen && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] bg-gray-900 text-white text-xs font-medium px-4 py-2 rounded-full shadow-lg print:hidden pointer-events-none">
+          Print dialog open — choose &ldquo;Save as PDF&rdquo; and click Save
         </div>
       )}
 
@@ -201,22 +188,14 @@ export default function ResumePreviewPage() {
           {/* Download PDF */}
           <button
             onClick={handleDownloadPdf}
-            disabled={pdfLoading}
-            className="flex items-center gap-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors"
           >
-            {pdfLoading ? (
-              <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-            ) : (
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-            )}
-            {pdfLoading ? 'Generating…' : 'Download PDF'}
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download PDF
           </button>
         </div>
       </motion.div>
