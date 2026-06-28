@@ -105,6 +105,31 @@ export default function ModernTheme({ resumeData, slug }: ModernThemeProps) {
   const { personalInfo, summary, experience, projects, skills, education } = resumeData
   const [menuOpen, setMenuOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('hero')
+  const [cvDownloading, setCvDownloading] = useState(false)
+
+  const handleDownloadCV = async () => {
+    setCvDownloading(true)
+    try {
+      const React = (await import('react')).default
+      const { pdf } = await import('@react-pdf/renderer')
+      const { ResumePDFDocument } = await import('@/components/resume/ResumePDFDocument')
+      const element = React.createElement(ResumePDFDocument, { resumeData })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const blob = await pdf(element as any).toBlob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${(personalInfo?.name || 'CV').replace(/\s+/g, '_')}_CV.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch {
+      // silent fallback
+    } finally {
+      setCvDownloading(false)
+    }
+  }
   const { scrollY } = useScroll()
   const navBg = useTransform(scrollY, [0, 80], ['rgba(15,23,42,0)', 'rgba(15,23,42,0.97)'])
 
@@ -183,12 +208,13 @@ export default function ModernTheme({ resumeData, slug }: ModernThemeProps) {
                 {link}
               </button>
             ))}
-            <a
-              href={`/api/portfolio/${slug}/export`}
-              className="ml-2 px-4 py-1.5 bg-indigo-600 text-white rounded-full text-sm font-medium hover:bg-indigo-500 transition-colors flex items-center gap-1.5"
+            <button
+              onClick={handleDownloadCV}
+              disabled={cvDownloading}
+              className="ml-2 px-4 py-1.5 bg-indigo-600 text-white rounded-full text-sm font-medium hover:bg-indigo-500 disabled:opacity-60 transition-colors flex items-center gap-1.5"
             >
-              <Download className="w-3.5 h-3.5" /> CV
-            </a>
+              <Download className="w-3.5 h-3.5" /> {cvDownloading ? '…' : 'CV'}
+            </button>
           </nav>
 
           {/* Mobile hamburger */}
@@ -273,13 +299,14 @@ export default function ModernTheme({ resumeData, slug }: ModernThemeProps) {
               </p>
             )}
             <div className="flex flex-wrap gap-4">
-              <a
-                href={`/api/portfolio/${slug}/export`}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-900/40 hover:shadow-indigo-600/40 hover:-translate-y-0.5"
+              <button
+                onClick={handleDownloadCV}
+                disabled={cvDownloading}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-900/40 hover:shadow-indigo-600/40 hover:-translate-y-0.5"
               >
                 <Download className="w-4 h-4" />
-                Download CV
-              </a>
+                {cvDownloading ? 'Generating…' : 'Download CV'}
+              </button>
               <button
                 onClick={() => scrollTo('contact')}
                 className="inline-flex items-center gap-2 px-6 py-3 border border-slate-600 text-slate-200 hover:border-indigo-500 hover:text-white font-semibold rounded-xl transition-all"

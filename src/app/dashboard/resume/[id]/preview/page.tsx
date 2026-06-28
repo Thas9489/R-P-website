@@ -52,38 +52,24 @@ export default function ResumePreviewPage() {
     if (!resume) return
     setPdfLoading(true)
     try {
-      const html2pdfModule = await import('html2pdf.js').catch(() => null)
-      if (html2pdfModule) {
-        const html2pdf = html2pdfModule.default
-        const element = document.getElementById('resume-preview-root')
-        if (!element) throw new Error('Resume element not found')
+      const React = (await import('react')).default
+      const { pdf } = await import('@react-pdf/renderer')
+      const { ResumePDFDocument } = await import('@/components/resume/ResumePDFDocument')
 
-        const clone = element.cloneNode(true) as HTMLElement
-        clone.style.transform = 'none'
-        clone.style.position = 'fixed'
-        clone.style.top = '-9999px'
-        clone.style.left = '-9999px'
-        clone.style.width = '595px'
-        clone.style.zIndex = '-1'
-        document.body.appendChild(clone)
+      const element = React.createElement(ResumePDFDocument, { resumeData: resume.data })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const blob = await pdf(element as any).toBlob()
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (html2pdf() as any)
-          .set({
-            margin: 0,
-            filename: `${resume.title.replace(/\s+/g, '_')}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, logging: false, width: 595, windowWidth: 595 },
-            jsPDF: { unit: 'px', format: [595, 842], orientation: 'portrait', hotfixes: ['px_scaling'] },
-          })
-          .from(clone)
-          .save()
-
-        document.body.removeChild(clone)
-      } else {
-        handlePrint()
-      }
-    } catch {
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${resume.title.replace(/[^a-z0-9]/gi, '_')}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (err) {
+      console.error('PDF generation failed:', err)
       toast.error('PDF generation failed — opening print dialog instead')
       handlePrint()
     } finally {
