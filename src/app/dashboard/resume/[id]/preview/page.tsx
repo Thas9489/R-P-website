@@ -59,24 +59,9 @@ export default function ResumePreviewPage() {
       return
     }
 
-    // Place the clone at position (0,0) in the viewport so html2canvas can
-    // render it without any page-layout interference (no windowWidth distortion).
-    // The loading overlay (z-200) hides it from the user.
-    const wrapper = document.createElement('div')
-    wrapper.style.cssText =
-      'position:fixed;top:0;left:0;width:595px;background:#fff;z-index:150;pointer-events:none;overflow:visible;'
-
-    const clone = source.cloneNode(true) as HTMLElement
-    clone.style.transform = 'none'
-    clone.style.width = '595px'
-    clone.style.minHeight = 'auto'
-    clone.style.boxShadow = 'none'
-    clone.style.overflow = 'visible'
-    wrapper.appendChild(clone)
-    document.body.appendChild(wrapper)
-
-    // Two animation frames so the browser paints the clone before capture
-    await new Promise<void>((r) => { requestAnimationFrame(() => { requestAnimationFrame(() => r()) }) })
+    // scrollHeight includes content hidden by overflow:hidden, so it gives
+    // the true content height for multi-page resumes
+    const contentHeight = source.scrollHeight
 
     try {
       const { default: html2pdf } = await import('html2pdf.js')
@@ -92,19 +77,42 @@ export default function ResumePreviewPage() {
             useCORS: true,
             allowTaint: true,
             logging: false,
+            // Capture exactly the resume width — prevents white space on the right
+            width: 595,
+            height: contentHeight,
+            // Correct for any page scroll so the element position is computed right
+            scrollX: -window.scrollX,
+            scrollY: -window.scrollY,
+            onclone: (_doc: Document, el: HTMLElement) => {
+              // Remove the scale transform so html2canvas sees the element at
+              // its natural 595 px width — no zoom, no cropping
+              el.style.transform = 'none'
+              el.style.boxShadow = 'none'
+              // position:relative keeps absolutely-positioned children anchored
+              // to the resume element, not the page
+              el.style.position = 'relative'
+              // overflow:visible lets multi-page content render in full height
+              el.style.overflow = 'visible'
+              el.style.width = '595px'
+              // Free the parent container so it doesn't clip the element height
+              const parent = el.parentElement
+              if (parent) {
+                parent.style.height = 'auto'
+                parent.style.overflow = 'visible'
+              }
+            },
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          // Shift whole blocks to the next page instead of cutting mid-element
+          // Avoid cutting through a block mid-element — shift it to the next page
           pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
         })
-        .from(clone)
+        .from(source)
         .save()
     } catch (err) {
       console.error('PDF generation failed:', err)
       toast.error('PDF generation failed — opening print dialog instead')
       handlePrint()
     } finally {
-      document.body.removeChild(wrapper)
       setPdfLoading(false)
     }
   }
