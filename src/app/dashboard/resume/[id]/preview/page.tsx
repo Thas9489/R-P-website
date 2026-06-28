@@ -51,28 +51,31 @@ export default function ResumePreviewPage() {
   const handleDownloadPdf = async () => {
     if (!resume) return
     setPdfLoading(true)
+
+    const source = document.getElementById('resume-preview-root')
+    if (!source) {
+      toast.error('Resume not ready — please wait a moment')
+      setPdfLoading(false)
+      return
+    }
+
+    // Save and strip the scale transform so html2canvas captures at true 595px size.
+    // The pdfLoading overlay covers the brief layout shift.
+    const savedTransform = source.style.transform
+    const savedBoxShadow = source.style.boxShadow
+    source.style.transform = 'none'
+    source.style.boxShadow = 'none'
+
+    // Wait two frames so the browser repaints before html2canvas reads the DOM
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    })
+
     try {
       const { default: html2pdf } = await import('html2pdf.js')
 
-      const source = document.getElementById('resume-preview-root')
-      if (!source) throw new Error('Resume preview element not found')
-
-      // Clone at natural (un-scaled) size so the PDF matches the on-screen template
-      const clone = source.cloneNode(true) as HTMLElement
-      clone.style.cssText = `
-        transform: none !important;
-        width: 595px;
-        min-height: 842px;
-        position: absolute;
-        left: -9999px;
-        top: 0;
-        background: #fff;
-        box-shadow: none;
-        overflow: visible;
-      `
-      document.body.appendChild(clone)
-
-      await html2pdf()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (html2pdf() as any)
         .set({
           margin: 0,
           filename: `${resume.title.replace(/[^a-z0-9]/gi, '_')}.pdf`,
@@ -87,15 +90,16 @@ export default function ResumePreviewPage() {
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
         })
-        .from(clone)
+        .from(source)
         .save()
-
-      document.body.removeChild(clone)
     } catch (err) {
       console.error('PDF generation failed:', err)
       toast.error('PDF generation failed — opening print dialog instead')
       handlePrint()
     } finally {
+      // Always restore styles, even if PDF generation threw
+      source.style.transform = savedTransform
+      source.style.boxShadow = savedBoxShadow
       setPdfLoading(false)
     }
   }
@@ -132,6 +136,19 @@ export default function ResumePreviewPage() {
 
   return (
     <div className="min-h-screen bg-gray-200 dark:bg-gray-950 print:bg-white">
+      {/* Full-screen overlay while PDF is generating — hides the transform removal flash */}
+      {pdfLoading && (
+        <div className="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center print:hidden">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl px-8 py-6 flex items-center gap-3 shadow-2xl">
+            <svg className="w-5 h-5 animate-spin text-indigo-600" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Generating PDF…</span>
+          </div>
+        </div>
+      )}
+
       {/* Floating toolbar — hidden when printing */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
