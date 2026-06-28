@@ -43,6 +43,8 @@ export default function SummaryStep() {
   const handleGenerate = async () => {
     setAiState('loading')
     setAiError('')
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 35000)
     try {
       const res = await fetch('/api/ai/generate', {
         method: 'POST',
@@ -52,6 +54,7 @@ export default function SummaryStep() {
           context: `Name: ${personalInfo.name}, Title: ${personalInfo.title}`,
           resumeData: { personalInfo, summary },
         }),
+        signal: controller.signal,
       })
       if (!res.ok) {
         const err = await res.json()
@@ -61,8 +64,14 @@ export default function SummaryStep() {
       setAiResult(data.result)
       setAiState('result')
     } catch (err) {
-      setAiError(err instanceof Error ? err.message : 'Something went wrong')
+      if (err instanceof Error && err.name === 'AbortError') {
+        setAiError('Request timed out. Please try again.')
+      } else {
+        setAiError(err instanceof Error ? err.message : 'Something went wrong')
+      }
       setAiState('idle')
+    } finally {
+      clearTimeout(timeout)
     }
   }
 

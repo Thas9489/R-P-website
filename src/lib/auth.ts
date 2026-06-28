@@ -77,12 +77,28 @@ export const authOptions: NextAuthOptions = {
     },
 
     async jwt({ token, user }) {
-      if (user?.id) token.id = user.id
-      if (token.id) {
-        const dbUser = await db.user.findById(token.id as string)
-        if (dbUser) {
-          token.credits = dbUser.credits as number
-          token.username = (dbUser.username as string) ?? ''
+      // On sign-in, populate from the user object returned by authorize()
+      if (user?.id) {
+        token.id = user.id
+        token.credits = 0 // will be refreshed from DB below
+      }
+
+      // Refresh credits from DB at most once every 5 minutes to avoid
+      // hitting Supabase on every single API request
+      const now = Date.now()
+      const lastFetched = (token.creditsAt as number) ?? 0
+      const needsRefresh = !lastFetched || now - lastFetched > 5 * 60 * 1000
+
+      if (token.id && needsRefresh) {
+        try {
+          const dbUser = await db.user.findById(token.id as string)
+          if (dbUser) {
+            token.credits = dbUser.credits
+            token.username = dbUser.username ?? ''
+            token.creditsAt = now
+          }
+        } catch {
+          // Don't block the request if DB is slow — use stale values
         }
       }
       return token
