@@ -109,17 +109,21 @@ export async function generateSummary(
     .map((s) => s.name)
     .join(', ')
 
-  const prompt = `Write a compelling 3-4 sentence professional summary for ${personalInfo.name || 'a professional'}, a ${personalInfo.title || 'professional'} with experience as ${expText || 'various roles'}. Key skills: ${skillText || 'various skills'}.
+  const prompt = `Write a professional resume summary for a ${personalInfo.title || 'professional'}${expText ? ` with experience as ${expText}` : ''}${skillText ? `. Skills: ${skillText}` : ''}.
 
-Requirements:
-- Start with a strong action word or professional title
-- Highlight years of experience and key achievements
-- Include 2-3 core competencies
-- End with value proposition
-- Do NOT use "I" — write in third person or directly
-- Keep it between 150-250 words`
+Rules:
+- Output ONLY the summary paragraph — no headings, no bullet points, no labels, no explanations
+- 2-3 sentences, maximum 450 characters total
+- Use third-person or direct tone (no "I")
+- Start directly with the summary text`
 
-  return generateText(prompt, 400)
+  const result = await generateText(prompt, 200)
+  // Strip any accidental preamble like "Here is..." or "Summary:"
+  const cleaned = result
+    .replace(/^(here'?s?|summary[:\-]?|professional summary[:\-]?|sure[,!]?).*/i, '')
+    .replace(/^[\s\-–:]+/, '')
+    .trim()
+  return cleaned.slice(0, 500)
 }
 
 export async function rewriteExperience(
