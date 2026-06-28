@@ -16,8 +16,6 @@ export default function ResumePreviewPage() {
 
   const [resume, setResume] = useState<Resume | null>(null)
   const [loadState, setLoadState] = useState<LoadState>('loading')
-  const [pdfLoading, setPdfLoading] = useState(false)
-
   useEffect(() => {
     if (!id) return
     fetch(`/api/resumes/${id}`)
@@ -44,85 +42,8 @@ export default function ResumePreviewPage() {
       })
   }, [id])
 
-  const handlePrint = () => {
-    window.print()
-  }
-
-  const handleDownloadPdf = () => {
-    if (!resume) return
-
-    const source = document.getElementById('resume-preview-root')
-    if (!source) {
-      toast.error('Resume not ready — please wait a moment')
-      return
-    }
-
-    setPdfLoading(true)
-
-    // Clone the live element and strip preview-only styles
-    const clone = source.cloneNode(true) as HTMLElement
-    clone.style.transform = 'none'
-    clone.style.boxShadow = 'none'
-    clone.style.overflow = 'visible'
-    clone.style.width = '595px'
-    clone.style.position = 'relative'
-
-    // Base href so /_next/static/css/... links resolve from origin
-    const origin = window.location.origin
-    const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
-      .map((el) => (el as HTMLElement).outerHTML)
-      .join('\n')
-
-    const safeName = resume.title.replace(/[^a-z0-9]/gi, '_')
-
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <base href="${origin}/">
-  <title>${safeName}</title>
-  ${styleLinks}
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 595px; background: white; }
-    @page { size: A4; margin: 0; }
-    body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-  </style>
-</head>
-<body>${clone.outerHTML}</body>
-</html>`
-
-    // Hidden iframe — never blocked by popup blockers
-    const iframe = document.createElement('iframe')
-    iframe.title = 'PDF print frame'
-    iframe.style.cssText =
-      'position:fixed;left:-9999px;top:0;width:595px;height:842px;border:0;'
-    document.body.appendChild(iframe)
-
-    const iframeWin = iframe.contentWindow
-    if (!iframeWin) {
-      document.body.removeChild(iframe)
-      setPdfLoading(false)
-      return
-    }
-
-    iframeWin.document.open()
-    iframeWin.document.write(html)
-    iframeWin.document.close()
-
-    const cleanup = () => {
-      try { document.body.removeChild(iframe) } catch { /* already removed */ }
-    }
-
-    // 600 ms lets fonts load before the print dialog captures the render
-    setTimeout(() => {
-      iframeWin.focus()
-      iframeWin.print()
-      setPdfLoading(false)
-      iframeWin.addEventListener('afterprint', cleanup)
-      setTimeout(cleanup, 15000) // fallback cleanup
-    }, 600)
-  }
+  const handlePrint = () => window.print()
+  const handleDownloadPdf = () => window.print()
 
   if (loadState === 'loading') {
     return (
@@ -156,13 +77,6 @@ export default function ResumePreviewPage() {
 
   return (
     <div className="min-h-screen bg-gray-200 dark:bg-gray-950 print:bg-white">
-      {/* Hint banner shown while PDF is being prepared */}
-      {pdfLoading && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] bg-gray-900 text-white text-xs font-medium px-4 py-2 rounded-full shadow-lg print:hidden pointer-events-none">
-          Preparing PDF… choose &ldquo;Save as PDF&rdquo; in the print dialog
-        </div>
-      )}
-
       {/* Floating toolbar — hidden when printing */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -202,22 +116,14 @@ export default function ResumePreviewPage() {
           {/* Download PDF */}
           <button
             onClick={handleDownloadPdf}
-            disabled={pdfLoading}
-            className="flex items-center gap-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors"
           >
-            {pdfLoading ? (
-              <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-            ) : (
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-            )}
-            {pdfLoading ? 'Preparing…' : 'Download PDF'}
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download PDF
           </button>
         </div>
       </motion.div>

@@ -134,6 +134,11 @@ html {
 
 /* Print styles */
 @media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
   .no-print {
     display: none !important;
   }
@@ -141,6 +146,20 @@ html {
   body {
     background: white !important;
     color: black !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Resume preview page: unlock the container height so multi-page
+     content is not clipped, and remove the decorative shadow/overflow */
+  #resume-container {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  #resume-preview-root {
+    overflow: visible !important;
+    box-shadow: none !important;
   }
 }
 

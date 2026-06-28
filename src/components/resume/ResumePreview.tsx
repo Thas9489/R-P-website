@@ -63,7 +63,7 @@ export function ResumePreview({ resumeData, template, scale }: ResumePreviewProp
   }, [scale])
 
   return (
-    <div ref={containerRef} className="w-full" style={{ height: RESUME_HEIGHT * computedScale }}>
+    <div ref={containerRef} id="resume-container" className="w-full" style={{ height: RESUME_HEIGHT * computedScale }}>
       <div
         id="resume-preview-root"
         style={{
