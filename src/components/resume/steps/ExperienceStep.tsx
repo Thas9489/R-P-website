@@ -118,12 +118,14 @@ export default function ExperienceStep() {
   const [newAchievement, setNewAchievement] = useState('')
   const [aiState, setAiState] = useState<'idle' | 'loading' | 'result'>('idle')
   const [aiResult, setAiResult] = useState('')
+  const [aiError, setAiError] = useState('')
 
   const openAdd = () => {
     setEditId(null)
     setForm(defaultForm)
     setErrors({})
     setAiState('idle')
+    setAiError('')
     setOpen(true)
   }
 
@@ -141,6 +143,7 @@ export default function ExperienceStep() {
     })
     setErrors({})
     setAiState('idle')
+    setAiError('')
     setOpen(true)
   }
 
@@ -179,22 +182,36 @@ export default function ExperienceStep() {
 
   const handleAiGenerate = async () => {
     setAiState('loading')
+    setAiError('')
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 35000)
     try {
       const res = await fetch('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'experience',
-          context: `Position: ${form.position}, Company: ${form.company}, Location: ${form.location}`,
+          context: JSON.stringify({
+            position: form.position,
+            company: form.company,
+            description: form.description,
+          }),
           resumeData: { experience: resumeData.experience },
         }),
+        signal: controller.signal,
       })
-      if (!res.ok) throw new Error('Failed')
       const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'AI generation failed')
       setAiResult(data.result)
       setAiState('result')
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error && err.name === 'AbortError'
+        ? 'Request timed out. Please try again.'
+        : err instanceof Error ? err.message : 'Something went wrong'
+      setAiError(msg)
       setAiState('idle')
+    } finally {
+      clearTimeout(timeout)
     }
   }
 
@@ -312,6 +329,7 @@ export default function ExperienceStep() {
                 className={`resize-none text-sm ${errors.description ? 'border-red-400' : ''}`}
               />
               {errors.description && <p className="text-xs text-red-500">{errors.description}</p>}
+              {aiError && <p className="text-xs text-red-500 bg-red-50 dark:bg-red-900/20 rounded px-2 py-1.5">{aiError}</p>}
             </div>
 
             {/* AI result */}

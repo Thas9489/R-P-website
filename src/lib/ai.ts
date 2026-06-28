@@ -50,15 +50,16 @@ async function generateText(prompt: string, maxTokens = 1024): Promise<string> {
         return await callOpenRouter(model, prompt, maxTokens)
       } catch (err) {
         const status = axios.isAxiosError(err) ? err.response?.status : null
-        // 429 = rate limited, 404 = model unavailable — try next
-        if (status === 429 || status === 404) {
-          console.warn(`[AI] ${model} unavailable (${status}), trying next model…`)
+        const isEmpty = err instanceof Error && err.message === 'Empty response from model'
+        // 429 = rate limited, 404 = model unavailable, empty = model refused — try next
+        if (status === 429 || status === 404 || isEmpty) {
+          console.warn(`[AI] ${model} unavailable (${isEmpty ? 'empty response' : status}), trying next model…`)
           continue
         }
         throw err
       }
     }
-    throw new Error('All OpenRouter models are currently rate-limited. Please try again in a moment.')
+    throw new Error('AI generation failed. All models are currently unavailable. Please try again in a moment.')
   }
 
   if (provider === 'gemini') {
@@ -131,7 +132,8 @@ export async function rewriteExperience(
   company: string,
   description: string
 ): Promise<string> {
-  const prompt = `Rewrite this job description for a ${position} at ${company} to be more impactful and ATS-optimized:
+  const prompt = description?.trim()
+    ? `Rewrite this job description for a ${position} at ${company} to be more impactful and ATS-optimized:
 
 "${description}"
 
@@ -140,6 +142,13 @@ Requirements:
 - Add quantifiable metrics where possible (%, $, time saved)
 - Keep bullet points concise (1-2 lines each)
 - Focus on impact and achievements
+- Return 4-5 bullet points, each starting with •`
+    : `Write a professional, ATS-optimized job description for a ${position} at ${company}.
+
+Requirements:
+- Use strong action verbs (Led, Built, Increased, Optimized, etc.)
+- Include typical responsibilities and quantifiable impact for this role
+- Keep bullet points concise (1-2 lines each)
 - Return 4-5 bullet points, each starting with •`
 
   return generateText(prompt, 500)
