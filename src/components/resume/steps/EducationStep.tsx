@@ -55,10 +55,12 @@ interface DatePickerProps {
   value: string
   onChange: (value: string) => void
   disabled?: boolean
+  error?: string
 }
 
-function DatePicker({ label, value, onChange, disabled }: DatePickerProps) {
+function DatePicker({ label, value, onChange, disabled, error }: DatePickerProps) {
   const { month, year } = stringToMonthYear(value)
+  const borderClass = error ? 'border-red-400 focus:ring-red-400' : 'border-input'
   return (
     <div className="flex flex-col gap-1.5">
       <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">{label}</Label>
@@ -67,7 +69,7 @@ function DatePicker({ label, value, onChange, disabled }: DatePickerProps) {
           value={month}
           onChange={(e) => onChange(monthYearToString(e.target.value, year))}
           disabled={disabled}
-          className="flex-1 h-9 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ring"
+          className={`flex-1 h-9 rounded-md border bg-background px-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ring ${borderClass}`}
         >
           <option value="">Month</option>
           {MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
@@ -76,12 +78,13 @@ function DatePicker({ label, value, onChange, disabled }: DatePickerProps) {
           value={year}
           onChange={(e) => onChange(monthYearToString(month, e.target.value))}
           disabled={disabled}
-          className="w-28 h-9 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ring"
+          className={`w-28 h-9 rounded-md border bg-background px-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ring ${borderClass}`}
         >
           <option value="">Year</option>
           {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
       </div>
+      {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
   )
 }
@@ -273,6 +276,7 @@ export default function EducationStep() {
                 label="Start Date *"
                 value={form.startDate}
                 onChange={(v) => set('startDate', v)}
+                error={errors.startDate}
               />
               <DatePicker
                 label="End Date"
@@ -325,8 +329,8 @@ export default function EducationStep() {
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="button" onClick={handleSave} className="bg-blue-600 hover:bg-blue-700">
               {editId ? 'Save Changes' : 'Add Education'}
             </Button>
           </DialogFooter>
