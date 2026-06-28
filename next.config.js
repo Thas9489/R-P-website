@@ -8,18 +8,6 @@ const nextConfig = {
       { protocol: 'https', hostname: 'images.unsplash.com' },
     ],
   },
-  webpack: (config, { isServer }) => {
-    // html2pdf.js and html2canvas are browser-only — exclude from server bundle
-    if (isServer) {
-      config.externals = [
-        ...(Array.isArray(config.externals) ? config.externals : []),
-        'html2pdf.js',
-        'html2canvas',
-        'jspdf',
-      ]
-    }
-    return config
-  },
 }
 
 module.exports = nextConfig
