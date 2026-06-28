@@ -1,9 +1,8 @@
 import { NextAuthOptions } from 'next-auth'
-import GoogleProvider from 'next-auth/providers/google'
-import GitHubProvider from 'next-auth/providers/github'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
+import { getServerSupabase } from '@/lib/supabase'
 import { generateSlug } from '@/lib/utils'
 
 export const authOptions: NextAuthOptions = {
@@ -14,23 +13,9 @@ export const authOptions: NextAuthOptions = {
     error: '/login',
   },
   providers: [
-    ...(process.env.GOOGLE_CLIENT_ID
-      ? [
-          GoogleProvider({
-            clientId: process.env.GOOGLE_CLIENT_ID!,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-          }),
-        ]
-      : []),
-    ...(process.env.GITHUB_CLIENT_ID
-      ? [
-          GitHubProvider({
-            clientId: process.env.GITHUB_CLIENT_ID!,
-            clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-          }),
-        ]
-      : []),
+    // Email/password login
     CredentialsProvider({
+      id: 'credentials',
       name: 'credentials',
       credentials: {
         email: { label: 'Email', type: 'email' },
@@ -40,32 +25,54 @@ export const authOptions: NextAuthOptions = {
         if (!credentials?.email || !credentials?.password) return null
         const user = await db.user.findByEmail(credentials.email)
         if (!user || !user.password) return null
-        const valid = await bcrypt.compare(credentials.password, user.password as string)
+        const valid = await bcrypt.compare(credentials.password, user.password)
         if (!valid) return null
-        return { id: user.id as string, email: user.email as string, name: user.name as string, image: user.image as string }
+        return { id: user.id, email: user.email ?? '', name: user.name ?? '', image: user.image ?? '' }
+      },
+    }),
+
+    // Supabase OAuth bridge — called from /auth/callback after Supabase OAuth flow
+    CredentialsProvider({
+      id: 'supabase-oauth',
+      name: 'Supabase OAuth',
+      credentials: {
+        email: {},
+        accessToken: {},
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.accessToken) return null
+
+        // Verify the Supabase access token is genuine
+        const sb = getServerSupabase()
+        const { data: { user: sbUser }, error } = await sb.auth.getUser(credentials.accessToken)
+        if (error || !sbUser || sbUser.email !== credentials.email) return null
+
+        // Get or create the user in our public.users table
+        let dbUser = await db.user.findByEmail(sbUser.email)
+        if (!dbUser) {
+          const name = (sbUser.user_metadata?.full_name as string)
+            || (sbUser.user_metadata?.name as string)
+            || sbUser.email.split('@')[0]
+          const username = await makeUniqueUsername(name)
+          dbUser = await db.user.create({
+            name,
+            email: sbUser.email,
+            username,
+            image: (sbUser.user_metadata?.avatar_url as string) ?? undefined,
+          })
+        } else if (!dbUser.username) {
+          const username = await makeUniqueUsername(dbUser.name ?? sbUser.email.split('@')[0])
+          await db.user.update(dbUser.id, { username })
+          dbUser = await db.user.findById(dbUser.id)
+        }
+
+        if (!dbUser) return null
+        return { id: dbUser.id, email: dbUser.email ?? '', name: dbUser.name ?? '', image: dbUser.image ?? '' }
       },
     }),
   ],
   callbacks: {
-    async signIn({ user, account }) {
-      // OAuth sign-in: create or find user in Supabase
-      if (account?.provider !== 'credentials' && user.email) {
-        let existing = await db.user.findByEmail(user.email)
-        if (!existing) {
-          const username = await makeUniqueUsername(user.name ?? user.email.split('@')[0])
-          existing = await db.user.create({
-            name: user.name ?? '',
-            email: user.email,
-            username,
-            image: user.image ?? undefined,
-          })
-        } else if (!existing.username) {
-          const username = await makeUniqueUsername(user.name ?? user.email.split('@')[0])
-          await db.user.update(existing.id as string, { username })
-        }
-        // Make sure the user id in the token matches our users table
-        user.id = existing.id as string
-      }
+    async signIn() {
       return true
     },
 

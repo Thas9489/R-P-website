@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
+import { createBrowserClient } from '@/lib/supabase'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -57,11 +58,18 @@ export default function LoginPage() {
     }
   }
 
-  // ── OAuth sign in ────────────────────────────────────────────────────────
+  // ── OAuth sign in via Supabase ───────────────────────────────────────────
   const handleOAuth = async (provider: 'google' | 'github') => {
     try {
       setOauthLoading(provider)
-      await signIn(provider, { callbackUrl: '/dashboard' })
+      const supabase = createBrowserClient()
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+      if (error) throw error
     } catch {
       toast.error('OAuth sign in failed. Please try again.')
       setOauthLoading(null)
