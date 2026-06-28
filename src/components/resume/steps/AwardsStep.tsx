@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, Trophy, CalendarDays } from 'lucide-react'
 import { useResumeStore } from '@/store/resumeStore'
 import type { Award } from '@/types'
@@ -37,29 +37,58 @@ function formatDate(date: string): string {
   return month && year ? `${month.slice(0, 3)} ${year}` : ''
 }
 
-function DatePicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  const { month, year } = stringToMonthYear(value)
+function DatePicker({ label, value, onChange, error }: { label: string; value: string; onChange: (v: string) => void; error?: string }) {
+  const parsed = stringToMonthYear(value)
+  const [localMonth, setLocalMonth] = useState(parsed.month)
+  const [localYear, setLocalYear] = useState(parsed.year)
+
+  useEffect(() => {
+    const { month, year } = stringToMonthYear(value)
+    setLocalMonth(month)
+    setLocalYear(year)
+  }, [value])
+
+  const handleMonthChange = (newMonth: string) => {
+    setLocalMonth(newMonth)
+    if (newMonth && localYear) {
+      onChange(monthYearToString(newMonth, localYear))
+    } else if (!newMonth) {
+      onChange('')
+    }
+  }
+
+  const handleYearChange = (newYear: string) => {
+    setLocalYear(newYear)
+    if (localMonth && newYear) {
+      onChange(monthYearToString(localMonth, newYear))
+    } else if (!newYear) {
+      onChange('')
+    }
+  }
+
+  const borderClass = error ? 'border-red-400' : 'border-input'
   return (
     <div className="flex flex-col gap-1.5">
       <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">{label}</Label>
       <div className="flex gap-2">
         <select
-          value={month}
-          onChange={(e) => onChange(monthYearToString(e.target.value, year))}
-          className="flex-1 h-9 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          value={localMonth}
+          onChange={(e) => handleMonthChange(e.target.value)}
+          className={`flex-1 h-9 rounded-md border bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring ${borderClass}`}
         >
           <option value="">Month</option>
-          {MONTHS.map((m) => <option key={m}>{m}</option>)}
+          {MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
         <select
-          value={year}
-          onChange={(e) => onChange(monthYearToString(month, e.target.value))}
-          className="w-28 h-9 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          value={localYear}
+          onChange={(e) => handleYearChange(e.target.value)}
+          className={`w-28 h-9 rounded-md border bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring ${borderClass}`}
         >
           <option value="">Year</option>
           {YEARS.map((y) => <option key={y}>{y}</option>)}
         </select>
       </div>
+      {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
   )
 }

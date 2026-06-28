@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, Briefcase, CalendarDays, Sparkles, RefreshCw, Check, Loader2 } from 'lucide-react'
 import { useResumeStore } from '@/store/resumeStore'
 import type { Experience } from '@/types'
@@ -37,31 +37,60 @@ function formatDate(date: string): string {
   return month && year ? `${month.slice(0, 3)} ${year}` : ''
 }
 
-function DatePicker({ label, value, onChange, disabled }: { label: string; value: string; onChange: (v: string) => void; disabled?: boolean }) {
-  const { month, year } = stringToMonthYear(value)
+function DatePicker({ label, value, onChange, disabled, error }: { label: string; value: string; onChange: (v: string) => void; disabled?: boolean; error?: string }) {
+  const parsed = stringToMonthYear(value)
+  const [localMonth, setLocalMonth] = useState(parsed.month)
+  const [localYear, setLocalYear] = useState(parsed.year)
+
+  useEffect(() => {
+    const { month, year } = stringToMonthYear(value)
+    setLocalMonth(month)
+    setLocalYear(year)
+  }, [value])
+
+  const handleMonthChange = (newMonth: string) => {
+    setLocalMonth(newMonth)
+    if (newMonth && localYear) {
+      onChange(monthYearToString(newMonth, localYear))
+    } else if (!newMonth) {
+      onChange('')
+    }
+  }
+
+  const handleYearChange = (newYear: string) => {
+    setLocalYear(newYear)
+    if (localMonth && newYear) {
+      onChange(monthYearToString(localMonth, newYear))
+    } else if (!newYear) {
+      onChange('')
+    }
+  }
+
+  const borderClass = error ? 'border-red-400' : 'border-input'
   return (
     <div className="flex flex-col gap-1.5">
       <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">{label}</Label>
       <div className="flex gap-2">
         <select
-          value={month}
-          onChange={(e) => onChange(monthYearToString(e.target.value, year))}
+          value={localMonth}
+          onChange={(e) => handleMonthChange(e.target.value)}
           disabled={disabled}
-          className="flex-1 h-9 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-ring"
+          className={`flex-1 h-9 rounded-md border bg-background px-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ring ${borderClass}`}
         >
           <option value="">Month</option>
-          {MONTHS.map((m) => <option key={m}>{m}</option>)}
+          {MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
         <select
-          value={year}
-          onChange={(e) => onChange(monthYearToString(month, e.target.value))}
+          value={localYear}
+          onChange={(e) => handleYearChange(e.target.value)}
           disabled={disabled}
-          className="w-28 h-9 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-ring"
+          className={`w-28 h-9 rounded-md border bg-background px-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ring ${borderClass}`}
         >
           <option value="">Year</option>
           {YEARS.map((y) => <option key={y}>{y}</option>)}
         </select>
       </div>
+      {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
   )
 }
@@ -245,7 +274,7 @@ export default function ExperienceStep() {
 
             {/* Dates */}
             <div className="grid grid-cols-2 gap-3">
-              <DatePicker label="Start Date *" value={form.startDate} onChange={(v) => set('startDate', v)} />
+              <DatePicker label="Start Date *" value={form.startDate} onChange={(v) => set('startDate', v)} error={errors.startDate} />
               <DatePicker label="End Date" value={form.endDate} onChange={(v) => set('endDate', v)} disabled={form.current} />
             </div>
 
@@ -339,8 +368,8 @@ export default function ExperienceStep() {
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="button" onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700">
               {editId ? 'Save Changes' : 'Add Experience'}
             </Button>
           </DialogFooter>
