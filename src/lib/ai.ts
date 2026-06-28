@@ -133,23 +133,25 @@ export async function rewriteExperience(
   description: string
 ): Promise<string> {
   const prompt = description?.trim()
-    ? `Rewrite this job description for a ${position} at ${company} to be more impactful and ATS-optimized:
+    ? `You are writing resume bullet points for someone who worked as a ${position} at ${company}.
 
+Rewrite the following into 4-5 strong resume bullet points:
 "${description}"
 
-Requirements:
-- Use strong action verbs (Led, Built, Increased, Optimized, etc.)
-- Add quantifiable metrics where possible (%, $, time saved)
-- Keep bullet points concise (1-2 lines each)
-- Focus on impact and achievements
-- Return 4-5 bullet points, each starting with •`
-    : `Write a professional, ATS-optimized job description for a ${position} at ${company}.
+Output ONLY the bullet points — no headings, no explanations, no commentary.
+Each bullet must:
+- Start with • followed by a strong past-tense action verb (Led, Built, Optimized, Delivered, etc.)
+- Be one concise sentence
+- Include a quantifiable result where possible (%, time saved, $ impact, scale)
+- Describe what the person accomplished, not a job posting`
+    : `You are writing resume bullet points for someone who worked as a ${position} at ${company}.
 
-Requirements:
-- Use strong action verbs (Led, Built, Increased, Optimized, etc.)
-- Include typical responsibilities and quantifiable impact for this role
-- Keep bullet points concise (1-2 lines each)
-- Return 4-5 bullet points, each starting with •`
+Output ONLY 4-5 resume bullet points — no headings, no explanations, no commentary, no preamble.
+Each bullet must:
+- Start with • followed by a strong past-tense action verb (Led, Built, Optimized, Delivered, etc.)
+- Be one concise sentence
+- Include a quantifiable result where possible (%, time saved, $ impact, scale)
+- Describe real accomplishments typical for a ${position} role`
 
   return generateText(prompt, 500)
 }
