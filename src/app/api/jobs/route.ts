@@ -1,181 +1,218 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Job, JobType } from '@/types'
 
-interface AdzunaJob {
-  id: string
+// ─── Remotive types ────────────────────────────────────────────────────────────
+interface RemotiveJob {
+  id: number
+  url: string
   title: string
-  company?: { display_name: string }
-  location?: { display_name: string; area: string[] }
-  category?: { label: string; tag: string }
-  description?: string
-  redirect_url?: string
-  contract_type?: string
-  contract_time?: string
-  salary_min?: number
-  salary_max?: number
-  created?: string
+  company_name: string
+  category: string
+  job_type: string
+  publication_date: string
+  salary: string
+  description: string
+  company_logo?: string
+  location: string
 }
 
-function mapJobType(contractType?: string, contractTime?: string): JobType {
-  if (contractType === 'contract') return 'contract'
-  if (contractTime === 'part_time') return 'part-time'
+// ─── Arbeitnow types ──────────────────────────────────────────────────────────
+interface ArbeitnowJob {
+  slug: string
+  company_name: string
+  title: string
+  description: string
+  tags: string[]
+  job_types: string[]
+  url: string
+  created_at: number
+  location: string
+  remote: boolean
+}
+
+// ─── Mappers ──────────────────────────────────────────────────────────────────
+
+function toJobType(raw?: string): JobType {
+  if (!raw) return 'full-time'
+  const s = raw.toLowerCase().replace(/[_-]/g, ' ')
+  if (s.includes('contract')) return 'contract'
+  if (s.includes('part')) return 'part-time'
+  if (s.includes('intern')) return 'internship'
+  if (s.includes('remote')) return 'remote'
   return 'full-time'
 }
 
-function mapAdzunaJob(item: AdzunaJob): Job {
-  const salaryStr =
-    item.salary_min && item.salary_max
-      ? `$${Math.round(item.salary_min / 1000)}k – $${Math.round(item.salary_max / 1000)}k`
-      : item.salary_min
-      ? `From $${Math.round(item.salary_min / 1000)}k`
-      : undefined
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 600)
+}
 
-  const location = item.location?.display_name || ''
-  const isRemote =
-    location.toLowerCase().includes('remote') ||
-    item.title.toLowerCase().includes('remote')
-
-  const description = item.description?.replace(/<[^>]+>/g, '').slice(0, 600) || ''
-
+function mapRemotive(j: RemotiveJob): Job {
   return {
-    id: item.id,
-    title: item.title,
-    company: item.company?.display_name || 'Unknown',
-    location: location || 'Location not specified',
-    type: mapJobType(item.contract_type, item.contract_time),
-    salary: salaryStr,
-    description,
+    id: `rm-${j.id}`,
+    title: j.title,
+    company: j.company_name,
+    location: j.location || 'Remote',
+    type: toJobType(j.job_type),
+    salary: j.salary || undefined,
+    description: stripHtml(j.description),
     requirements: [],
-    url: item.redirect_url || '#',
-    source: 'Adzuna',
-    logo: '',
-    remote: isRemote,
-    postedAt: item.created || new Date().toISOString(),
-    tags: item.category?.label ? [item.category.label] : [],
+    url: j.url,
+    source: 'Remotive',
+    logo: j.company_logo || '',
+    remote: true,
+    postedAt: j.publication_date,
+    tags: j.category ? [j.category] : [],
   }
 }
 
-// ─── Fallback mock data (used when API key is not configured) ─────────────────
+function mapArbeitnow(j: ArbeitnowJob): Job {
+  return {
+    id: `an-${j.slug}`,
+    title: j.title,
+    company: j.company_name,
+    location: j.remote ? 'Remote' : (j.location || 'Not specified'),
+    type: toJobType(j.job_types?.[0]),
+    salary: undefined,
+    description: stripHtml(j.description),
+    requirements: [],
+    url: j.url,
+    source: 'Arbeitnow',
+    logo: '',
+    remote: j.remote,
+    postedAt: j.created_at ? new Date(j.created_at * 1000).toISOString() : new Date().toISOString(),
+    tags: j.tags ?? [],
+  }
+}
+
+// ─── API fetchers ─────────────────────────────────────────────────────────────
+
+async function fetchRemotive(keyword: string): Promise<Job[]> {
+  const qs = new URLSearchParams({ limit: '50' })
+  if (keyword) qs.set('search', keyword)
+  const res = await fetch(`https://remotive.com/api/remote-jobs?${qs}`, {
+    next: { revalidate: 300 },
+  })
+  if (!res.ok) throw new Error(`Remotive ${res.status}`)
+  const data = await res.json()
+  return ((data.jobs as RemotiveJob[]) ?? []).map(mapRemotive)
+}
+
+async function fetchArbeitnow(keyword: string, page: number): Promise<Job[]> {
+  const qs = new URLSearchParams({ page: String(page) })
+  if (keyword) qs.set('search', keyword)
+  const res = await fetch(`https://arbeitnow.com/api/job-board-api?${qs}`, {
+    next: { revalidate: 300 },
+  })
+  if (!res.ok) throw new Error(`Arbeitnow ${res.status}`)
+  const data = await res.json()
+  return ((data.data as ArbeitnowJob[]) ?? []).map(mapArbeitnow)
+}
+
+// ─── Mock fallback ────────────────────────────────────────────────────────────
 
 const MOCK_JOBS: Job[] = [
   {
     id: '1', title: 'Senior Frontend Developer', company: 'TechCorp', location: 'San Francisco, CA',
     type: 'full-time', salary: '$120k – $160k', remote: true,
-    description: 'We are looking for a Senior Frontend Developer to join our growing team. You will work on building next-generation web applications using React and TypeScript.',
-    requirements: ['5+ years React experience', 'TypeScript proficiency', 'Next.js experience'],
-    url: '#', source: 'Mock', logo: '', postedAt: new Date(Date.now() - 86400000).toISOString(), tags: ['React', 'TypeScript', 'Next.js'],
+    description: 'We are looking for a Senior Frontend Developer to join our growing team, building next-generation web applications using React and TypeScript.',
+    requirements: ['5+ years React', 'TypeScript', 'Next.js'],
+    url: '#', source: 'Demo', logo: '', postedAt: new Date(Date.now() - 86400000).toISOString(), tags: ['React', 'TypeScript'],
   },
   {
     id: '2', title: 'Full Stack Engineer', company: 'StartupXYZ', location: 'New York, NY',
     type: 'full-time', salary: '$100k – $140k', remote: false,
     description: 'Join our fast-growing startup as a Full Stack Engineer. Work across the entire stack using Node.js, React, and PostgreSQL.',
-    requirements: ['Node.js', 'React', 'PostgreSQL', 'AWS experience'],
-    url: '#', source: 'Mock', logo: '', postedAt: new Date(Date.now() - 172800000).toISOString(), tags: ['Node.js', 'React', 'PostgreSQL'],
+    requirements: ['Node.js', 'React', 'PostgreSQL'],
+    url: '#', source: 'Demo', logo: '', postedAt: new Date(Date.now() - 172800000).toISOString(), tags: ['Node.js', 'React'],
   },
   {
-    id: '3', title: 'Backend Engineer (Go)', company: 'CloudSystems', location: 'Remote',
+    id: '3', title: 'Backend Engineer', company: 'CloudSystems', location: 'Remote',
     type: 'remote', salary: '$130k – $170k', remote: true,
-    description: 'We are building distributed systems at scale. Looking for an experienced Go developer.',
-    requirements: ['Go/Golang 3+ years', 'Kubernetes', 'Microservices'],
-    url: '#', source: 'Mock', logo: '', postedAt: new Date(Date.now() - 259200000).toISOString(), tags: ['Go', 'Kubernetes', 'Cloud'],
-  },
-  {
-    id: '4', title: 'DevOps Engineer', company: 'InfraScale', location: 'Austin, TX',
-    type: 'full-time', salary: '$110k – $150k', remote: true,
-    description: 'Join our DevOps team and help us build reliable, scalable infrastructure using AWS and Terraform.',
-    requirements: ['AWS', 'Terraform', 'Docker', 'CI/CD'],
-    url: '#', source: 'Mock', logo: '', postedAt: new Date(Date.now() - 345600000).toISOString(), tags: ['AWS', 'DevOps', 'Terraform'],
-  },
-  {
-    id: '5', title: 'Data Scientist', company: 'AI Research Co', location: 'Seattle, WA',
-    type: 'full-time', salary: '$140k – $180k', remote: false,
-    description: 'Apply ML/DL techniques to solve complex business problems. Work with large-scale datasets.',
-    requirements: ['Python', 'PyTorch/TensorFlow', 'SQL', 'Statistics'],
-    url: '#', source: 'Mock', logo: '', postedAt: new Date(Date.now() - 432000000).toISOString(), tags: ['Python', 'ML', 'Data Science'],
-  },
-  {
-    id: '6', title: 'Mobile Developer (React Native)', company: 'AppWorks', location: 'Remote',
-    type: 'remote', salary: '$90k – $130k', remote: true,
-    description: 'Build cross-platform mobile apps using React Native. Work closely with design and product teams.',
-    requirements: ['React Native', 'iOS/Android', 'TypeScript', 'REST APIs'],
-    url: '#', source: 'Mock', logo: '', postedAt: new Date(Date.now() - 518400000).toISOString(), tags: ['React Native', 'Mobile', 'TypeScript'],
+    description: 'We are building distributed systems at scale. Looking for an experienced backend developer.',
+    requirements: ['Go or Python', 'Kubernetes', 'Microservices'],
+    url: '#', source: 'Demo', logo: '', postedAt: new Date(Date.now() - 259200000).toISOString(), tags: ['Go', 'Kubernetes'],
   },
 ]
 
+// ─── Route handler ────────────────────────────────────────────────────────────
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const keyword = searchParams.get('keyword') || ''
+  const keyword  = searchParams.get('keyword')  || ''
   const location = searchParams.get('location') || ''
-  const type = searchParams.get('type') || 'all'
-  const remote = searchParams.get('remote') === 'true'
-  const page = parseInt(searchParams.get('page') || '1')
-  const limit = parseInt(searchParams.get('limit') || '20')
+  const type     = searchParams.get('type')     || 'all'
+  const remote   = searchParams.get('remote')   === 'true'
+  const page     = Math.max(1, parseInt(searchParams.get('page')  || '1'))
+  const limit    = Math.min(20, parseInt(searchParams.get('limit') || '20'))
 
-  const appId = process.env.ADZUNA_APP_ID
-  const appKey = process.env.ADZUNA_APP_KEY
-  const country = (process.env.ADZUNA_COUNTRY || 'us').toLowerCase()
+  // ── Try live APIs (no key needed) ─────────────────────────────────────────
+  try {
+    const [remResult, anResult] = await Promise.allSettled([
+      fetchRemotive(keyword),
+      fetchArbeitnow(keyword, page),
+    ])
 
-  // ── Live Adzuna search ──────────────────────────────────────────────────────
-  if (appId && appKey) {
-    try {
-      const qs = new URLSearchParams({
-        app_id: appId,
-        app_key: appKey,
-        results_per_page: String(limit),
-        content_type: 'application/json',
-      })
-      if (keyword) qs.set('what', keyword)
-      if (location) qs.set('where', location)
-      if (remote || type === 'remote') {
-        qs.set('what_and', keyword ? `${keyword} remote` : 'remote')
-      }
+    let jobs: Job[] = []
+    if (remResult.status === 'fulfilled') jobs = [...jobs, ...remResult.value]
+    if (anResult.status  === 'fulfilled') jobs = [...jobs, ...anResult.value]
 
-      const url = `https://api.adzuna.com/v1/api/jobs/${country}/search/${page}?${qs}`
-      const res = await fetch(url, { next: { revalidate: 300 } })
+    if (jobs.length === 0) throw new Error('No results from live APIs')
 
-      if (!res.ok) {
-        const text = await res.text()
-        console.error('[JOBS] Adzuna error', res.status, text)
-        throw new Error(`Adzuna ${res.status}`)
-      }
+    // Deduplicate by title + company
+    const seen = new Set<string>()
+    jobs = jobs.filter((j) => {
+      const key = `${j.title}|${j.company}`.toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
 
-      const data = await res.json()
-      let jobs = ((data.results as AdzunaJob[]) || []).map(mapAdzunaJob)
-
-      // Client-side type filter (Adzuna doesn't have a granular contract_type filter)
-      if (type !== 'all' && type !== 'remote') {
-        jobs = jobs.filter((j) => j.type === type)
-      }
-      if (remote) {
-        jobs = jobs.filter((j) => j.remote)
-      }
-
-      jobs = jobs.map((j) => ({ ...j, matchScore: Math.floor(Math.random() * 40) + 60 }))
-
-      const total: number = data.count ?? jobs.length
-      return NextResponse.json({
-        jobs,
-        total,
-        page,
-        hasMore: page * limit < total,
-        source: 'adzuna',
-      })
-    } catch (err) {
-      console.error('[JOBS] Adzuna fetch failed, falling back to mock', err)
-      // fall through to mock
+    // Location filter — include remote jobs + matching location text
+    if (location) {
+      const loc = location.toLowerCase()
+      jobs = jobs.filter(
+        (j) =>
+          j.remote ||
+          j.location.toLowerCase().includes(loc)
+      )
     }
+
+    // Type filter
+    if (type !== 'all') jobs = jobs.filter((j) => j.type === type)
+    if (remote)         jobs = jobs.filter((j) => j.remote)
+
+    // Match score: boost jobs whose title contains the keyword
+    const kw = keyword.toLowerCase()
+    jobs = jobs.map((j) => ({
+      ...j,
+      matchScore:
+        kw && j.title.toLowerCase().includes(kw)
+          ? Math.floor(Math.random() * 15) + 85
+          : Math.floor(Math.random() * 30) + 60,
+    }))
+    jobs.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
+
+    const total = jobs.length
+    const paged = jobs.slice((page - 1) * limit, page * limit)
+
+    return NextResponse.json({
+      jobs: paged,
+      total,
+      page,
+      hasMore: page * limit < total,
+    })
+  } catch (err) {
+    console.error('[JOBS] live APIs failed, using mock', err)
   }
 
-  // ── Mock fallback (no API key or Adzuna error) ─────────────────────────────
+  // ── Mock fallback ─────────────────────────────────────────────────────────
   let jobs = [...MOCK_JOBS]
-
   if (keyword) {
     const kw = keyword.toLowerCase()
     jobs = jobs.filter(
       (j) =>
         j.title.toLowerCase().includes(kw) ||
         j.company.toLowerCase().includes(kw) ||
-        j.description.toLowerCase().includes(kw) ||
         j.tags?.some((t) => t.toLowerCase().includes(kw))
     )
   }
@@ -184,18 +221,11 @@ export async function GET(req: NextRequest) {
     jobs = jobs.filter((j) => j.location.toLowerCase().includes(loc) || j.remote)
   }
   if (type !== 'all') jobs = jobs.filter((j) => j.type === type)
-  if (remote) jobs = jobs.filter((j) => j.remote)
+  if (remote)         jobs = jobs.filter((j) => j.remote)
 
   jobs = jobs.map((j) => ({ ...j, matchScore: Math.floor(Math.random() * 40) + 60 }))
-
   const total = jobs.length
   const paged = jobs.slice((page - 1) * limit, page * limit)
 
-  return NextResponse.json({
-    jobs: paged,
-    total,
-    page,
-    hasMore: (page - 1) * limit + paged.length < total,
-    source: 'mock',
-  })
+  return NextResponse.json({ jobs: paged, total, page, hasMore: false })
 }
