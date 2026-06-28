@@ -57,34 +57,31 @@ export default function ResumePreviewPage() {
       return
     }
 
-    // Save every inline style we will temporarily override
-    const saved: Record<string, string> = {
-      transform: el.style.transform,
-      position: el.style.position,
-      top: el.style.top,
-      left: el.style.left,
-      zIndex: el.style.zIndex,
-      boxShadow: el.style.boxShadow,
-      overflow: el.style.overflow,
-    }
+    // Clone the element so we never touch the live preview's styles.
+    // position:static keeps absolutely-positioned children anchored to
+    // the clone (not the viewport), preventing the left-side cut-off.
+    const clone = el.cloneNode(true) as HTMLElement
+    clone.style.transform = 'none'
+    clone.style.position = 'static'
+    clone.style.boxShadow = 'none'
+    clone.style.overflow = 'visible'
+    clone.style.width = '595px'
 
-    // Pin the element to the top-left of the viewport at its natural
-    // 595 px width with no scale transform so html2canvas can render
-    // it correctly. The loading overlay (z-index 99999) hides this.
-    el.style.transform = 'none'
-    el.style.position = 'fixed'
-    el.style.top = '0'
-    el.style.left = '0'
-    el.style.zIndex = '99998'
-    el.style.boxShadow = 'none'
-    el.style.overflow = 'visible'
+    // Wrapper pinned to the viewport top-left so html2canvas can see it.
+    const wrapper = document.createElement('div')
+    wrapper.style.cssText =
+      'position:fixed;top:0;left:0;width:595px;background:#fff;z-index:99998;'
+    wrapper.appendChild(clone)
+    document.body.appendChild(wrapper)
 
-    // Two animation frames let the browser repaint before we capture
+    // Two frames so the browser paints the clone before we capture
     await new Promise<void>((r) =>
       requestAnimationFrame(() => requestAnimationFrame(() => r()))
     )
 
-    const contentHeight = el.scrollHeight
+    // Use offsetHeight (layout height) — more reliable than scrollHeight
+    // for a static child inside a fixed wrapper
+    const contentHeight = Math.max(clone.offsetHeight, 842)
     const filename = `${resume.title.replace(/[^a-z0-9]/gi, '_')}.pdf`
 
     try {
@@ -103,23 +100,24 @@ export default function ResumePreviewPage() {
             allowTaint: true,
             logging: false,
             width: 595,
+            // windowHeight overrides the browser's actual window height so
+            // html2canvas renders the full multi-page content, not just the
+            // visible portion — this fixes the blank second page
+            windowWidth: 595,
+            windowHeight: contentHeight,
             height: contentHeight,
             scrollX: 0,
             scrollY: 0,
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
         })
-        .from(el)
+        .from(wrapper)
         .save()
     } catch (err) {
       console.error('PDF generation failed:', err)
       toast.error('PDF generation failed — try again')
     } finally {
-      // Restore every original inline style exactly
-      for (const [prop, val] of Object.entries(saved)) {
-        ;(el.style as unknown as Record<string, string>)[prop] = val
-      }
+      try { document.body.removeChild(wrapper) } catch { /* already gone */ }
       setPdfLoading(false)
     }
   }
