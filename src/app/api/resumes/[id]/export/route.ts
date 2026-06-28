@@ -12,8 +12,8 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
     if (!resume) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (resume.userId !== session.user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-    const fileName = `${resume.title.replace(/[^a-z0-9]/gi, '_')}.json`
-    return new NextResponse(JSON.stringify(resume, null, 2), {
+    const fileName = `${resume.title.replace(/[^a-z0-9]/gi, '_')}_backup.json`
+    return new NextResponse(JSON.stringify(resume.data, null, 2), {
       headers: {
         'Content-Type': 'application/json',
         'Content-Disposition': `attachment; filename="${fileName}"`,

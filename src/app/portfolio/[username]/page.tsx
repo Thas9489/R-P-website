@@ -99,8 +99,12 @@ export default async function PublicPortfolioPage({
     notFound()
   }
 
-  const resumeData = portfolio.resume?.data as ResumeData
+  const resumeData = portfolio.resume?.data as ResumeData | undefined
   const theme = (portfolio.theme || 'modern') as PortfolioTheme
+
+  if (!resumeData) {
+    notFound()
+  }
 
   return (
     <>

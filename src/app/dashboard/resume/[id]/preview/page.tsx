@@ -16,6 +16,7 @@ export default function ResumePreviewPage() {
 
   const [resume, setResume] = useState<Resume | null>(null)
   const [loadState, setLoadState] = useState<LoadState>('loading')
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -45,6 +46,49 @@ export default function ResumePreviewPage() {
 
   const handlePrint = () => {
     window.print()
+  }
+
+  const handleDownloadPdf = async () => {
+    if (!resume) return
+    setPdfLoading(true)
+    try {
+      const html2pdfModule = await import('html2pdf.js').catch(() => null)
+      if (html2pdfModule) {
+        const html2pdf = html2pdfModule.default
+        const element = document.getElementById('resume-preview-root')
+        if (!element) throw new Error('Resume element not found')
+
+        const clone = element.cloneNode(true) as HTMLElement
+        clone.style.transform = 'none'
+        clone.style.position = 'fixed'
+        clone.style.top = '-9999px'
+        clone.style.left = '-9999px'
+        clone.style.width = '595px'
+        clone.style.zIndex = '-1'
+        document.body.appendChild(clone)
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (html2pdf() as any)
+          .set({
+            margin: 0,
+            filename: `${resume.title.replace(/\s+/g, '_')}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: false, width: 595, windowWidth: 595 },
+            jsPDF: { unit: 'px', format: [595, 842], orientation: 'portrait', hotfixes: ['px_scaling'] },
+          })
+          .from(clone)
+          .save()
+
+        document.body.removeChild(clone)
+      } else {
+        handlePrint()
+      }
+    } catch {
+      toast.error('PDF generation failed — opening print dialog instead')
+      handlePrint()
+    } finally {
+      setPdfLoading(false)
+    }
   }
 
   if (loadState === 'loading') {
@@ -116,18 +160,25 @@ export default function ResumePreviewPage() {
           <div className="w-px h-5 bg-gray-200 dark:bg-gray-700" />
 
           {/* Download PDF */}
-          <a
-            href={`/api/resumes/${id}/export`}
-            download={`${resume.title}.pdf`}
-            className="flex items-center gap-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors"
+          <button
+            onClick={handleDownloadPdf}
+            disabled={pdfLoading}
+            className="flex items-center gap-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg transition-colors"
           >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Download PDF
-          </a>
+            {pdfLoading ? (
+              <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            )}
+            {pdfLoading ? 'Generating…' : 'Download PDF'}
+          </button>
         </div>
       </motion.div>
 

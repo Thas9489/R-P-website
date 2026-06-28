@@ -175,7 +175,7 @@ export default function PortfolioSettings({ portfolio, onUpdate }: PortfolioSett
     setDeleteDialogOpen(false)
   }
 
-  const portfolioUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/p/${portfolio.slug}`
+  const portfolioUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/portfolio/${portfolio.slug}`
 
   const slugStateConfig = {
     idle: { color: 'text-slate-400', icon: null, text: '' },
