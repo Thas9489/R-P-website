@@ -1,25 +1,64 @@
 import axios from 'axios'
 import type { ResumeData } from '@/types'
 
+// Fallback chain — tried in order if the primary model is rate-limited
+const FALLBACK_MODELS = [
+  'google/gemma-4-26b-a4b-it:free',
+  'google/gemma-4-31b-it:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'openai/gpt-oss-20b:free',
+  'openai/gpt-oss-120b:free',
+]
+
+async function callOpenRouter(model: string, prompt: string, maxTokens: number): Promise<string> {
+  const res = await axios.post(
+    'https://openrouter.ai/api/v1/chat/completions',
+    {
+      model,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an expert resume writer and career coach. Write professional, ATS-optimized content.',
+        },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: maxTokens,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001',
+      },
+      timeout: 30000,
+    }
+  )
+  const content = res.data.choices?.[0]?.message?.content
+  if (!content) throw new Error('Empty response from model')
+  return content
+}
+
 async function generateText(prompt: string, maxTokens = 1024): Promise<string> {
   const provider = process.env.AI_PROVIDER || 'openai'
 
   if (provider === 'openrouter') {
-    const res = await axios.post(
-      'https://openrouter.ai/api/v1/chat/completions',
-      {
-        model: process.env.OPENROUTER_MODEL || 'openai/gpt-4-turbo',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: maxTokens,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
+    const primary = process.env.OPENROUTER_MODEL || FALLBACK_MODELS[0]
+    const models = [primary, ...FALLBACK_MODELS.filter((m) => m !== primary)]
+
+    for (const model of models) {
+      try {
+        return await callOpenRouter(model, prompt, maxTokens)
+      } catch (err) {
+        const status = axios.isAxiosError(err) ? err.response?.status : null
+        // 429 = rate limited, 404 = model unavailable — try next
+        if (status === 429 || status === 404) {
+          console.warn(`[AI] ${model} unavailable (${status}), trying next model…`)
+          continue
+        }
+        throw err
       }
-    )
-    return res.data.choices[0]?.message?.content || ''
+    }
+    throw new Error('All OpenRouter models are currently rate-limited. Please try again in a moment.')
   }
 
   if (provider === 'gemini') {
