@@ -59,6 +59,25 @@ export default function ResumePreviewPage() {
       return
     }
 
+    // Place the clone at position (0,0) in the viewport so html2canvas can
+    // render it without any page-layout interference (no windowWidth distortion).
+    // The loading overlay (z-200) hides it from the user.
+    const wrapper = document.createElement('div')
+    wrapper.style.cssText =
+      'position:fixed;top:0;left:0;width:595px;background:#fff;z-index:150;pointer-events:none;overflow:visible;'
+
+    const clone = source.cloneNode(true) as HTMLElement
+    clone.style.transform = 'none'
+    clone.style.width = '595px'
+    clone.style.minHeight = 'auto'
+    clone.style.boxShadow = 'none'
+    clone.style.overflow = 'visible'
+    wrapper.appendChild(clone)
+    document.body.appendChild(wrapper)
+
+    // Two animation frames so the browser paints the clone before capture
+    await new Promise<void>((r) => { requestAnimationFrame(() => { requestAnimationFrame(() => r()) }) })
+
     try {
       const { default: html2pdf } = await import('html2pdf.js')
 
@@ -73,38 +92,19 @@ export default function ResumePreviewPage() {
             useCORS: true,
             allowTaint: true,
             logging: false,
-            width: 595,
-            windowWidth: 595,
-            // Modify the internal html2canvas clone — never touches the real DOM,
-            // so there is zero visual flash or layout shift on screen
-            onclone: (clonedDoc: Document) => {
-              const el = clonedDoc.getElementById('resume-preview-root')
-              if (!el) return
-              // Remove the scale transform so the clone renders at natural 595 × 842px
-              el.style.transform = 'none'
-              el.style.boxShadow = 'none'
-              // Allow content taller than one page to overflow and be captured fully
-              el.style.overflow = 'visible'
-              el.style.minHeight = 'auto'
-              // Also let the outer container grow so it doesn't clip the resume
-              const parent = el.parentElement
-              if (parent) {
-                parent.style.height = 'auto'
-                parent.style.overflow = 'visible'
-              }
-            },
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          // Prevent mid-element page breaks — moves whole blocks to the next page
+          // Shift whole blocks to the next page instead of cutting mid-element
           pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
         })
-        .from(source)
+        .from(clone)
         .save()
     } catch (err) {
       console.error('PDF generation failed:', err)
       toast.error('PDF generation failed — opening print dialog instead')
       handlePrint()
     } finally {
+      document.body.removeChild(wrapper)
       setPdfLoading(false)
     }
   }
