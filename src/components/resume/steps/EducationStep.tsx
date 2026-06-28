@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, GraduationCap, CalendarDays } from 'lucide-react'
 import { useResumeStore } from '@/store/resumeStore'
 import type { Education } from '@/types'
@@ -59,15 +59,44 @@ interface DatePickerProps {
 }
 
 function DatePicker({ label, value, onChange, disabled, error }: DatePickerProps) {
-  const { month, year } = stringToMonthYear(value)
+  const parsed = stringToMonthYear(value)
+  const [localMonth, setLocalMonth] = useState(parsed.month)
+  const [localYear, setLocalYear] = useState(parsed.year)
+
+  // Sync local state when parent resets the value (e.g. dialog open/close)
+  useEffect(() => {
+    const { month, year } = stringToMonthYear(value)
+    setLocalMonth(month)
+    setLocalYear(year)
+  }, [value])
+
+  const handleMonthChange = (newMonth: string) => {
+    setLocalMonth(newMonth)
+    // Only propagate when both parts are selected
+    if (newMonth && localYear) {
+      onChange(monthYearToString(newMonth, localYear))
+    } else if (!newMonth) {
+      onChange('')
+    }
+  }
+
+  const handleYearChange = (newYear: string) => {
+    setLocalYear(newYear)
+    if (localMonth && newYear) {
+      onChange(monthYearToString(localMonth, newYear))
+    } else if (!newYear) {
+      onChange('')
+    }
+  }
+
   const borderClass = error ? 'border-red-400 focus:ring-red-400' : 'border-input'
   return (
     <div className="flex flex-col gap-1.5">
       <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">{label}</Label>
       <div className="flex gap-2">
         <select
-          value={month}
-          onChange={(e) => onChange(monthYearToString(e.target.value, year))}
+          value={localMonth}
+          onChange={(e) => handleMonthChange(e.target.value)}
           disabled={disabled}
           className={`flex-1 h-9 rounded-md border bg-background px-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ring ${borderClass}`}
         >
@@ -75,8 +104,8 @@ function DatePicker({ label, value, onChange, disabled, error }: DatePickerProps
           {MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
         <select
-          value={year}
-          onChange={(e) => onChange(monthYearToString(month, e.target.value))}
+          value={localYear}
+          onChange={(e) => handleYearChange(e.target.value)}
           disabled={disabled}
           className={`w-28 h-9 rounded-md border bg-background px-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ring ${borderClass}`}
         >
