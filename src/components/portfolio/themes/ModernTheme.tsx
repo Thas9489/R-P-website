@@ -102,7 +102,14 @@ function categoryColor(cat?: string) {
 }
 
 export default function ModernTheme({ resumeData, slug }: ModernThemeProps) {
-  const { personalInfo, summary, experience, projects, skills, education } = resumeData
+  const {
+    personalInfo,
+    summary,
+    experience = [],
+    projects = [],
+    skills = [],
+    education = [],
+  } = resumeData
   const [menuOpen, setMenuOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('hero')
   const [cvDownloading, setCvDownloading] = useState(false)
@@ -582,7 +589,7 @@ export default function ModernTheme({ resumeData, slug }: ModernThemeProps) {
                     </p>
                     {/* Tech tags */}
                     <div className="flex flex-wrap gap-1.5 mb-4">
-                      {project.technologies.slice(0, 5).map((tech) => (
+                      {(project.technologies ?? []).slice(0, 5).map((tech) => (
                         <span
                           key={tech}
                           className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-xs font-medium"

@@ -60,7 +60,15 @@ function SkillPill({ name, level }: { name: string; level: string }) {
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function CreativeTheme({ resumeData }: CreativeThemeProps) {
-  const { personalInfo, summary, experience, education, projects, skills, certifications } = resumeData
+  const {
+    personalInfo,
+    summary,
+    experience = [],
+    education = [],
+    projects = [],
+    skills = [],
+    certifications = [],
+  } = resumeData
 
   const socialLinks = [
     personalInfo.github  && { href: personalInfo.github,   icon: <Github className="w-5 h-5" />,   label: 'GitHub' },
@@ -179,9 +187,9 @@ export default function CreativeTheme({ resumeData }: CreativeThemeProps) {
                       {exp.location && <> &middot; {exp.location}</>}
                     </p>
                     <p className="text-sm text-gray-600 leading-relaxed">{exp.description}</p>
-                    {exp.achievements.length > 0 && (
+                    {(exp.achievements ?? []).length > 0 && (
                       <ul className="mt-2 space-y-1">
-                        {exp.achievements.map((a, idx) => (
+                        {(exp.achievements ?? []).map((a, idx) => (
                           <li key={idx} className="text-sm text-gray-600 flex items-start gap-2">
                             <span className="text-purple-500 mt-1">✦</span>
                             {a}
@@ -223,7 +231,7 @@ export default function CreativeTheme({ resumeData }: CreativeThemeProps) {
                     </div>
                     <p className="text-sm text-gray-500 leading-relaxed mb-3">{proj.description}</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {proj.technologies.map((tech) => (
+                      {(proj.technologies ?? []).map((tech) => (
                         <span key={tech} className="text-xs font-medium px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">
                           {tech}
                         </span>

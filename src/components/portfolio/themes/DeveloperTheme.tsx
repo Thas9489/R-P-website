@@ -121,7 +121,8 @@ const langColors: Record<string, string> = {
 }
 
 function RepoCard({ project }: { project: ResumeData['projects'][0] }) {
-  const primaryLang = project.technologies[0]
+  const technologies = project.technologies ?? []
+  const primaryLang = technologies[0]
   const langColor = langColors[primaryLang] ?? langColors.default
   const fakeStars = Math.floor(Math.random() * 120) + 5
   const fakeForks = Math.floor(fakeStars / 4)
@@ -156,7 +157,7 @@ function RepoCard({ project }: { project: ResumeData['projects'][0] }) {
       <p className="text-[#8b949e] text-xs leading-relaxed flex-1 mb-4">{project.description}</p>
 
       <div className="flex flex-wrap gap-1.5 mb-4">
-        {project.technologies.slice(1, 4).map((tech) => (
+        {technologies.slice(1, 4).map((tech) => (
           <span
             key={tech}
             className="text-[10px] font-mono bg-[#1f2937] text-[#c9d1d9] px-2 py-0.5 rounded border border-[#30363d]"
@@ -183,8 +184,15 @@ function RepoCard({ project }: { project: ResumeData['projects'][0] }) {
 }
 
 export default function DeveloperTheme({ resumeData }: DeveloperThemeProps) {
-  const { personalInfo, summary, experience, projects, skills, education } = resumeData
-  const firstName = personalInfo.name.split(' ')[0].toLowerCase()
+  const {
+    personalInfo,
+    summary,
+    experience = [],
+    projects = [],
+    skills = [],
+    education = [],
+  } = resumeData
+  const firstName = (personalInfo.name || '').split(' ')[0].toLowerCase()
   const skillGroups = skills.reduce<Record<string, typeof skills>>((acc, s) => {
     const cat = s.category ?? 'Other'
     acc[cat] = [...(acc[cat] ?? []), s]

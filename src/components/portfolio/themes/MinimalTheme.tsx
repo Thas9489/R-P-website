@@ -42,7 +42,14 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 }
 
 export default function MinimalTheme({ resumeData }: MinimalThemeProps) {
-  const { personalInfo, summary, experience, projects, skills, education } = resumeData
+  const {
+    personalInfo,
+    summary,
+    experience = [],
+    projects = [],
+    skills = [],
+    education = [],
+  } = resumeData
   const [navScrolled, setNavScrolled] = useState(false)
 
   useEffect(() => {
@@ -280,7 +287,7 @@ export default function MinimalTheme({ resumeData }: MinimalThemeProps) {
                           {proj.description}
                         </p>
                         <p className="text-xs text-slate-400">
-                          {proj.technologies.join(', ')}
+                          {(proj.technologies ?? []).join(', ')}
                         </p>
                       </div>
                       <div className="flex gap-2 shrink-0 mt-0.5">
