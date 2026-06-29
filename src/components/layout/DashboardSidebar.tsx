@@ -11,7 +11,6 @@ import {
   Globe,
   Search,
   Bookmark,
-  Sparkles,
   LogOut,
   BrainCircuit,
   Menu,
@@ -35,9 +34,6 @@ const navItems: NavItem[] = [
   { label: 'Job Search', href: '/dashboard/jobs', icon: Search },
   { label: 'Saved Jobs', href: '/dashboard/saved-jobs', icon: Bookmark },
 ];
-
-// Mock credits — replace with real value from session/API as needed
-const MOCK_CREDITS = 42;
 
 // ---------------------------------------------------------------------------
 // Helper: initials from name / email
@@ -132,14 +128,6 @@ function DesktopSidebar() {
 
       {/* User section */}
       <div className="px-3 pb-3 border-t border-border pt-3 space-y-2 shrink-0">
-        {/* Credits badge */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40">
-          <Sparkles size={15} className="text-amber-500 shrink-0" />
-          <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
-            {MOCK_CREDITS} AI credits left
-          </span>
-        </div>
-
         {/* Avatar + name */}
         <div className="flex items-center gap-2.5 px-2 py-1.5">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold shrink-0">
@@ -302,14 +290,6 @@ function MobileDrawer({ open, onClose }: MobileDrawerProps) {
 
             {/* User section */}
             <div className="px-3 pb-4 border-t border-border pt-3 space-y-2 shrink-0">
-              {/* Credits badge */}
-              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40">
-                <Sparkles size={15} className="text-amber-500 shrink-0" />
-                <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                  {MOCK_CREDITS} AI credits left
-                </span>
-              </div>
-
               {/* Avatar + name */}
               <div className="flex items-center gap-2.5 px-2 py-1.5">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold shrink-0">
