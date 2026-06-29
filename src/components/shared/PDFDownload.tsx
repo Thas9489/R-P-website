@@ -39,12 +39,18 @@ function LoadingSpinner() {
 }
 
 /**
- * Walk the DOM and collect safe page-break positions.
+ * Walk the DOM and collect page-break candidates.
  *
- * Rule: flex-row containers (two-column layouts) are treated as ONE
- * unbreakable unit — we only add their BOTTOM as a candidate, never
- * any position inside them.  This prevents the page-break from cutting
- * horizontally across two columns at different heights.
+ * Small flex-rows (≤ 50px tall — date rows, contact strips, skill tags):
+ *   → Add their bottom as a candidate and stop recursing.
+ *
+ * Large flex-rows (> 50px — two-column layouts, sidebar bodies):
+ *   → Go ONE level deep into each column child to get section-level tops.
+ *     This gives us break candidates inside multi-column templates (Modern,
+ *     Creative, Developer) WITHOUT recursing into individual content items
+ *     that would produce too-granular cuts.
+ *
+ * Block / flex-column containers: recurse normally, collecting all children tops.
  */
 function collectSafeBreaks(root: HTMLElement, cloneTop: number): number[] {
   const set = new Set<number>([0])
@@ -56,13 +62,32 @@ function collectSafeBreaks(root: HTMLElement, cloneTop: number): number[] {
     const isFlexRow = isFlex && (dir === 'row' || dir === 'row-reverse')
 
     if (isFlexRow) {
-      // Treat the whole row as one block — only its bottom is a safe break
-      const bottom = Math.round(el.getBoundingClientRect().bottom - cloneTop)
+      const rect = el.getBoundingClientRect()
+      const height = Math.round(rect.bottom - rect.top)
+      const bottom = Math.round(rect.bottom - cloneTop)
+
+      if (height <= 50) {
+        // Small inline row — just add its bottom and stop
+        if (bottom > 0) set.add(bottom)
+        return
+      }
+
+      // Large multi-column flex-row (sidebar body, two-column lower section, etc.)
+      // Collect the TOP of each direct section child within each column.
+      // This gives section-level break candidates without going too deep.
+      Array.from(el.children).forEach((col) => {
+        Array.from((col as HTMLElement).children).forEach((section) => {
+          const top = Math.round((section as HTMLElement).getBoundingClientRect().top - cloneTop)
+          if (top > 10) set.add(top)
+        })
+      })
+
+      // Bottom of the entire flex-row is also a valid break point
       if (bottom > 0) set.add(bottom)
-      return  // do NOT recurse into columns
+      return
     }
 
-    // Block / flex-column: each child's top is a candidate
+    // Block / flex-column: each child's top is a candidate; recurse
     Array.from(el.children).forEach((child) => {
       const c = child as HTMLElement
       const top = Math.round(c.getBoundingClientRect().top - cloneTop)
