@@ -19,7 +19,6 @@ export default async function DashboardPage() {
     <DashboardClient
       userName={user.name ?? 'there'}
       userImage={user.image ?? null}
-      credits={(user.credits as number) ?? 0}
       resumes={resumes.slice(0, 10).map((r) => ({
         id: r.id,
         title: r.title,

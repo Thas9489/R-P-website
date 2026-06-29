@@ -30,7 +30,6 @@ interface ResumeCard {
 interface DashboardClientProps {
   userName: string;
   userImage: string | null;
-  credits: number;
   resumes: ResumeCard[];
   resumeCount: number;
   savedJobCount: number;
@@ -199,7 +198,6 @@ function ChecklistItem({ label, done }: ChecklistItemProps) {
 export default function DashboardClient({
   userName,
   userImage,
-  credits,
   resumes,
   resumeCount,
   savedJobCount,
@@ -271,14 +269,6 @@ export default function DashboardClient({
           iconColor="text-green-600 dark:text-green-400"
           iconBg="bg-green-50 dark:bg-green-900/20"
           description="In your list"
-        />
-        <StatCard
-          label="AI Credits"
-          value={credits}
-          icon={Sparkles}
-          iconColor="text-amber-600 dark:text-amber-400"
-          iconBg="bg-amber-50 dark:bg-amber-900/20"
-          description="Available"
         />
       </motion.div>
 
