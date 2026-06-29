@@ -9,18 +9,16 @@ interface PDFDownloadProps {
   fileName?: string
 }
 
+const PAGE_W = 595        // A4 width px
+const PAGE_H = 842        // A4 height px
+const MARGIN = 24         // margin on every side (px)
+const INNER_W = PAGE_W - MARGIN * 2   // 547
+const INNER_H = PAGE_H - MARGIN * 2   // 794
+
 function DownloadIcon() {
   return (
-    <svg
-      width={16}
-      height={16}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
       <polyline points="7 10 12 15 17 10" />
       <line x1="12" y1="15" x2="12" y2="3" />
@@ -30,23 +28,10 @@ function DownloadIcon() {
 
 function LoadingSpinner() {
   return (
-    <svg
-      width={16}
-      height={16}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .spinner { animation: spin 0.8s linear infinite; transform-origin: center; }
-      `}</style>
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.sp{animation:spin .8s linear infinite;transform-origin:center}`}</style>
       <circle cx="12" cy="12" r="10" strokeOpacity={0.25} />
-      <path className="spinner" d="M12 2a10 10 0 0110 10" />
+      <path className="sp" d="M12 2a10 10 0 0110 10" />
     </svg>
   )
 }
@@ -55,80 +40,107 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const defaultFileName = fileName || `${resumeData.personalInfo.name.replace(/\s+/g, '_')}_Resume.pdf`
+  const defaultFileName = fileName ||
+    `${resumeData.personalInfo.name.replace(/\s+/g, '_')}_Resume.pdf`
 
   async function handleDownload() {
     setIsLoading(true)
     setError(null)
 
     try {
-      const html2pdfModule = await import('html2pdf.js').catch(() => null)
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ])
 
-      if (html2pdfModule) {
-        const html2pdf = html2pdfModule.default
+      const element = document.getElementById('resume-preview-root')
+      if (!element) throw new Error('Resume element not found.')
 
-        const element = document.getElementById('resume-preview-root')
-        if (!element) {
-          throw new Error('Resume element not found. Make sure ResumePreview is mounted.')
-        }
+      // Clone at true 1:1, render width = INNER_W so margins appear naturally
+      const clone = element.cloneNode(true) as HTMLElement
+      clone.style.transform = 'none'
+      clone.style.position = 'fixed'
+      clone.style.top = '0'
+      clone.style.left = '-9999px'
+      clone.style.width = `${INNER_W}px`
+      clone.style.minHeight = 'unset'
+      clone.style.overflow = 'visible'
+      clone.style.zIndex = '-1'
+      document.body.appendChild(clone)
 
-        // Clone at 1:1 scale, off-screen
-        const clone = element.cloneNode(true) as HTMLElement
-        clone.style.transform = 'none'
-        clone.style.position = 'fixed'
-        clone.style.top = '-9999px'
-        clone.style.left = '-9999px'
-        clone.style.width = '595px'
-        clone.style.overflow = 'visible'
-        clone.style.zIndex = '-1'
-        document.body.appendChild(clone)
+      // Two rAF so layout fully settles before measuring
+      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
 
-        // Wait two frames for layout to fully settle
-        await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
-        const contentHeight = clone.scrollHeight
+      // Collect top positions of every block-level child (section boundaries)
+      const cloneTop = clone.getBoundingClientRect().top
+      const breakCandidates = new Set<number>([0])
+      clone.querySelectorAll('div, p, ul, li, section').forEach((el) => {
+        const top = Math.round(el.getBoundingClientRect().top - cloneTop)
+        if (top > 0) breakCandidates.add(top)
+      })
+      const breaks = Array.from(breakCandidates).sort((a, b) => a - b)
 
-        const A4_HEIGHT = 842
-        // Treat anything up to 1.25× A4 as single-page — avoids cuts on
-        // resumes with a small overflow (a few lines into a second page)
-        const SINGLE_PAGE_THRESHOLD = Math.round(A4_HEIGHT * 1.25) // ~1052px
+      // Render the full clone as one tall canvas (2× for retina sharpness)
+      const canvas = await html2canvas(clone, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        width: INNER_W,
+        windowWidth: INNER_W,
+      })
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const options: any = {
-          margin: 0,
-          filename: defaultFileName,
-          image: { type: 'jpeg' as const, quality: 0.98 },
-          html2canvas: {
-            scale: 2,
-            useCORS: true,
-            logging: false,
-            width: 595,
-            windowWidth: 595,
-          },
-          jsPDF: {
-            unit: 'px',
-            format: [595, contentHeight <= SINGLE_PAGE_THRESHOLD ? Math.max(contentHeight, A4_HEIGHT) : A4_HEIGHT],
-            orientation: 'portrait',
-            hotfixes: ['px_scaling'],
-          },
-        }
+      document.body.removeChild(clone)
 
-        if (contentHeight > SINGLE_PAGE_THRESHOLD) {
-          // Truly multi-page: inject break-inside: avoid on every content
-          // wrapper so html2pdf never slices through an element
-          clone.querySelectorAll('div, p, ul, li').forEach((el) => {
-            const h = el as HTMLElement
-            h.style.breakInside = 'avoid'
-            h.style.pageBreakInside = 'avoid'
-          })
-          options.pagebreak = { mode: ['avoid-all'] }
-        }
+      const contentH = canvas.height / 2   // actual px height of content
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (html2pdf() as any).set(options).from(clone).save()
-        document.body.removeChild(clone)
+      const doc = new jsPDF({
+        unit: 'px',
+        format: [PAGE_W, PAGE_H],
+        orientation: 'portrait',
+        hotfixes: ['px_scaling'],
+      })
+
+      if (contentH <= INNER_H) {
+        // ── Single page: content fits with margins, no 2nd page ──────────────
+        const img = canvas.toDataURL('image/jpeg', 0.98)
+        doc.addImage(img, 'JPEG', MARGIN, MARGIN, INNER_W, contentH)
       } else {
-        fallbackPrint(defaultFileName)
+        // ── Multi-page: slice at safe section boundaries ──────────────────────
+        // Find the latest break-point that falls before each page's bottom edge
+        let pageStart = 0      // in content-px
+        let firstPage = true
+
+        while (pageStart < contentH) {
+          if (!firstPage) doc.addPage()
+          firstPage = false
+
+          const pageBottom = pageStart + INNER_H
+
+          if (pageBottom >= contentH) {
+            // Last (or only overflow) page — just take the rest
+            const sliceH = contentH - pageStart
+            const sliceCanvas = cropCanvas(canvas, pageStart, sliceH)
+            doc.addImage(sliceCanvas.toDataURL('image/jpeg', 0.98),
+              'JPEG', MARGIN, MARGIN, INNER_W, sliceH)
+            break
+          }
+
+          // Find the highest break-point that is ≤ pageBottom
+          // (prefer ending just before a new section starts)
+          const safeEnd = breaks
+            .filter((b) => b > pageStart && b <= pageBottom)
+            .pop() ?? pageBottom
+
+          const sliceH = safeEnd - pageStart
+          const sliceCanvas = cropCanvas(canvas, pageStart, sliceH)
+          doc.addImage(sliceCanvas.toDataURL('image/jpeg', 0.98),
+            'JPEG', MARGIN, MARGIN, INNER_W, sliceH)
+
+          pageStart = safeEnd
+        }
       }
+
+      doc.save(defaultFileName)
     } catch (err) {
       console.error('PDF generation error:', err)
       fallbackPrint(defaultFileName)
@@ -137,27 +149,40 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
     }
   }
 
+  /** Crop a 2× canvas slice: y and h are in 1× (CSS) px */
+  function cropCanvas(
+    src: HTMLCanvasElement,
+    y: number,
+    h: number,
+  ): HTMLCanvasElement {
+    const out = document.createElement('canvas')
+    out.width = src.width
+    out.height = Math.round(h * 2)
+    const ctx = out.getContext('2d')!
+    ctx.drawImage(src, 0, Math.round(y * 2), src.width, out.height, 0, 0, src.width, out.height)
+    return out
+  }
+
   function fallbackPrint(name: string) {
     const style = document.createElement('style')
     style.id = '__resume-print-style'
     style.textContent = `
       @media print {
-        body > *:not(#resume-print-wrapper) { display: none !important; }
-        #resume-print-wrapper {
+        body > *:not(#__resume-print-wrapper) { display: none !important; }
+        #__resume-print-wrapper {
           display: block !important;
           position: fixed;
           top: 0; left: 0; right: 0; bottom: 0;
           z-index: 99999;
+          padding: ${MARGIN}px;
+          box-sizing: border-box;
         }
         #resume-preview-root {
           transform: none !important;
-          width: 595px !important;
+          width: 100% !important;
           box-shadow: none !important;
         }
-        @page {
-          size: A4;
-          margin: 0;
-        }
+        @page { size: A4; margin: 0; }
       }
     `
     document.head.appendChild(style)
@@ -176,15 +201,12 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
 
     const originalTitle = document.title
     document.title = name
-
     window.print()
 
-    // Cleanup
     setTimeout(() => {
       document.title = originalTitle
-      const s = document.getElementById('__resume-print-style')
-      if (s) s.remove()
-      if (wrapper) wrapper.remove()
+      document.getElementById('__resume-print-style')?.remove()
+      wrapper?.remove()
     }, 1000)
   }
 
@@ -210,14 +232,8 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
           opacity: isLoading ? 0.8 : 1,
           boxShadow: '0 2px 8px rgba(59,130,246,0.35)',
         }}
-        onMouseEnter={(e) => {
-          if (!isLoading)
-            (e.currentTarget as HTMLButtonElement).style.background = '#2563eb'
-        }}
-        onMouseLeave={(e) => {
-          if (!isLoading)
-            (e.currentTarget as HTMLButtonElement).style.background = '#3b82f6'
-        }}
+        onMouseEnter={(e) => { if (!isLoading) (e.currentTarget as HTMLButtonElement).style.background = '#2563eb' }}
+        onMouseLeave={(e) => { if (!isLoading) (e.currentTarget as HTMLButtonElement).style.background = '#3b82f6' }}
         aria-label="Download resume as PDF"
       >
         {isLoading ? <LoadingSpinner /> : <DownloadIcon />}
@@ -225,14 +241,7 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
       </button>
 
       {error && (
-        <p
-          style={{
-            marginTop: 6,
-            fontSize: 12,
-            color: '#ef4444',
-            fontFamily: 'system-ui, sans-serif',
-          }}
-        >
+        <p style={{ marginTop: 6, fontSize: 12, color: '#ef4444', fontFamily: 'system-ui, sans-serif' }}>
           {error}
         </p>
       )}
