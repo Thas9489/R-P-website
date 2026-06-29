@@ -11,7 +11,6 @@ import {
   Menu,
   X,
   LayoutDashboard,
-  Settings,
   LogOut,
   ChevronDown,
 } from 'lucide-react';
@@ -193,14 +192,6 @@ export default function Navbar() {
                           <LayoutDashboard size={15} />
                           Dashboard
                         </Link>
-                        <Link
-                          href="/dashboard/settings"
-                          onClick={() => setDropdownOpen(false)}
-                          className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                        >
-                          <Settings size={15} />
-                          Settings
-                        </Link>
                         <div className="border-t border-border mt-1 pt-1">
                           <button
                             onClick={() => signOut({ callbackUrl: '/' })}
@@ -294,14 +285,6 @@ export default function Navbar() {
                   >
                     <LayoutDashboard size={16} />
                     Dashboard
-                  </Link>
-                  <Link
-                    href="/dashboard/settings"
-                    onClick={() => setMobileOpen(false)}
-                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    <Settings size={16} />
-                    Settings
                   </Link>
                   <div className="pt-2 border-t border-border mt-2">
                     <button
