@@ -89,23 +89,74 @@ function ShareModal({ url, onClose }: { url: string; onClose: () => void }) {
   )
 }
 
-function SettingsPanel({ portfolio, onUpdate }: { portfolio: Portfolio; onUpdate: (u: Partial<Portfolio>) => void }) {
+function SettingsPanel({
+  portfolio,
+  resumes,
+  onUpdate,
+  onDelete,
+}: {
+  portfolio: Portfolio
+  resumes: Resume[]
+  onUpdate: (u: Partial<Portfolio>) => void
+  onDelete: () => void
+}) {
   const [slug, setSlug] = useState(portfolio.slug)
   const [theme, setTheme] = useState<PortfolioTheme>(portfolio.theme as PortfolioTheme)
   const [isPublic, setIsPublic] = useState(portfolio.isPublic)
+  const [resumeId, setResumeId] = useState(portfolio.resumeId)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  // Sync local state when the portfolio prop is replaced (e.g. after a save returns updated data)
+  useEffect(() => {
+    setSlug(portfolio.slug)
+    setTheme(portfolio.theme as PortfolioTheme)
+    setIsPublic(portfolio.isPublic)
+    setResumeId(portfolio.resumeId)
+  }, [portfolio.id, portfolio.slug, portfolio.theme, portfolio.isPublic, portfolio.resumeId])
 
   const handleSave = async () => {
     setSaving(true)
     try {
-      const res = await fetch('/api/portfolio', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme, isPublic, slug }) })
-      if (!res.ok) { const { error } = await res.json(); throw new Error(error || 'Failed to save') }
+      const body: Record<string, unknown> = { theme, isPublic, slug }
+      if (resumeId !== portfolio.resumeId) body.resumeId = resumeId
+
+      const res = await fetch('/api/portfolio', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const { error } = await res.json()
+        throw new Error(error || 'Failed to save')
+      }
       const { portfolio: updated } = await res.json()
       onUpdate(updated)
       toast.success('Portfolio settings saved')
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to save settings')
-    } finally { setSaving(false) }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true)
+      return
+    }
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/portfolio', { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      toast.success('Portfolio deleted')
+      onDelete()
+    } catch {
+      toast.error('Failed to delete portfolio')
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
   }
 
   return (
@@ -114,6 +165,8 @@ function SettingsPanel({ portfolio, onUpdate }: { portfolio: Portfolio; onUpdate
         <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg>
         Portfolio Settings
       </h3>
+
+      {/* Theme */}
       <div className="mb-4">
         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Theme</label>
         <div className="grid grid-cols-2 gap-2">
@@ -125,25 +178,110 @@ function SettingsPanel({ portfolio, onUpdate }: { portfolio: Portfolio; onUpdate
           ))}
         </div>
       </div>
+
+      {/* Resume selector */}
+      {resumes.length > 0 && (
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Resume</label>
+          <select
+            value={resumeId}
+            onChange={(e) => setResumeId(e.target.value)}
+            className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          >
+            {resumes.map((r) => (
+              <option key={r.id} value={r.id}>{r.title}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* URL Slug */}
       <div className="mb-4">
         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">URL Slug</label>
         <div className="flex items-center rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
           <span className="px-3 py-2 text-xs text-gray-400 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 whitespace-nowrap">/portfolio/</span>
-          <input type="text" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} className="flex-1 px-3 py-2 text-xs bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50" />
+          <input
+            type="text"
+            value={slug}
+            onChange={(e) =>
+              setSlug(
+                e.target.value
+                  .toLowerCase()
+                  .replace(/[^a-z0-9-]/g, '-')
+                  .replace(/-+/g, '-')
+                  .replace(/^-|-$/g, ''),
+              )
+            }
+            className="flex-1 px-3 py-2 text-xs bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            placeholder="your-name"
+          />
         </div>
       </div>
+
+      {/* Public toggle */}
       <div className="mb-5 flex items-center justify-between">
         <div>
           <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Public Portfolio</p>
           <p className="text-xs text-gray-400 mt-0.5">Anyone with the link can view it</p>
         </div>
-        <button type="button" role="switch" aria-checked={isPublic} onClick={() => setIsPublic(!isPublic)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isPublic ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'}`}>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={isPublic}
+          onClick={() => setIsPublic(!isPublic)}
+          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isPublic ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'}`}
+        >
           <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${isPublic ? 'translate-x-4' : 'translate-x-0.5'}`} />
         </button>
       </div>
-      <button onClick={handleSave} disabled={saving} className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors">
-        {saving ? (<><svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Saving…</>) : 'Save Settings'}
+
+      {/* Save */}
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+      >
+        {saving ? (
+          <><svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Saving…</>
+        ) : 'Save Settings'}
       </button>
+
+      {/* Delete zone */}
+      <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+        <AnimatePresence>
+          {confirmDelete && (
+            <motion.p
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="text-xs text-red-600 dark:text-red-400 mb-2"
+            >
+              This will permanently delete your portfolio. Click again to confirm.
+            </motion.p>
+          )}
+        </AnimatePresence>
+        <div className="flex gap-2">
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className={`flex-1 py-2 text-xs font-medium rounded-xl border transition-colors disabled:opacity-60 ${
+              confirmDelete
+                ? 'bg-red-600 border-red-600 text-white hover:bg-red-700'
+                : 'border-red-200 dark:border-red-900 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30'
+            }`}
+          >
+            {deleting ? 'Deleting…' : confirmDelete ? 'Confirm Delete' : 'Delete Portfolio'}
+          </button>
+          {confirmDelete && (
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="px-3 py-2 text-xs font-medium rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -289,7 +427,12 @@ export default function PortfolioPage() {
               </div>
             </div>
             <div className="lg:col-span-1">
-              <SettingsPanel portfolio={portfolio} onUpdate={(updates) => setPortfolio((prev) => prev ? { ...prev, ...updates } : prev)} />
+              <SettingsPanel
+                portfolio={portfolio}
+                resumes={resumes}
+                onUpdate={(updates) => setPortfolio((prev) => prev ? { ...prev, ...updates } : prev)}
+                onDelete={() => setPortfolio(null)}
+              />
             </div>
           </motion.div>
         )}

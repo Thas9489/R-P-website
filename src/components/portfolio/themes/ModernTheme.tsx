@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { toast } from 'sonner'
 import { motion, useInView, useScroll, useTransform } from 'framer-motion'
 import {
   Github,
@@ -132,7 +133,7 @@ export default function ModernTheme({ resumeData, slug }: ModernThemeProps) {
       document.body.removeChild(a)
       setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch {
-      // silent fallback
+      toast.error('Failed to generate CV — try again')
     } finally {
       setCvDownloading(false)
     }

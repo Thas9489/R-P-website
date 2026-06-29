@@ -195,7 +195,7 @@ export const db = {
       if (error) throw error
       return mapPortfolio(data as unknown as PortfolioWithResume)
     },
-    async update(userId: string, updates: { theme?: string; isPublic?: boolean; slug?: string }): Promise<Portfolio> {
+    async update(userId: string, updates: { theme?: string; isPublic?: boolean; slug?: string; resumeId?: string }): Promise<Portfolio> {
       const sb = getServerSupabase()
       const { data, error } = await sb
         .from('portfolios')
@@ -203,12 +203,18 @@ export const db = {
           ...(updates.theme !== undefined && { theme: updates.theme }),
           ...(updates.isPublic !== undefined && { is_public: updates.isPublic }),
           ...(updates.slug !== undefined && { slug: updates.slug }),
+          ...(updates.resumeId !== undefined && { resume_id: updates.resumeId }),
         })
         .eq('user_id', userId)
         .select('*, resume:resumes(*)')
         .single()
       if (error) throw error
       return mapPortfolio(data as unknown as PortfolioWithResume)
+    },
+    async delete(userId: string): Promise<void> {
+      const sb = getServerSupabase()
+      const { error } = await sb.from('portfolios').delete().eq('user_id', userId)
+      if (error) throw error
     },
     async incrementViews(id: string): Promise<void> {
       const sb = getServerSupabase()
