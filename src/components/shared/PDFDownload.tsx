@@ -9,16 +9,13 @@ interface PDFDownloadProps {
   fileName?: string
 }
 
-// A4 page dimensions (px at 72dpi — matches jsPDF px unit)
 const PAGE_W = 595
 const PAGE_H = 842
-const MARGIN = 20                        // margin on every side
-const INNER_W = PAGE_W - MARGIN * 2     // 555  — usable width
-const INNER_H = PAGE_H - MARGIN * 2     // 802  — usable height per page
-// Render at full 595px so layout matches the preview exactly.
-// jsPDF will scale the image to INNER_W, shrinking by INNER_W/595 ≈ 93%.
-const RENDER_W = PAGE_W                  // 595
-const SCALE = INNER_W / RENDER_W        // ~0.932 (content→PDF space)
+const MARGIN = 20
+const INNER_W = PAGE_W - MARGIN * 2   // 555
+const INNER_H = PAGE_H - MARGIN * 2   // 802
+const RENDER_W = PAGE_W               // render at full 595 to match preview
+const SCALE = INNER_W / RENDER_W      // ~0.932
 
 function DownloadIcon() {
   return (
@@ -41,12 +38,49 @@ function LoadingSpinner() {
   )
 }
 
+/**
+ * Walk the DOM and collect safe page-break positions.
+ *
+ * Rule: flex-row containers (two-column layouts) are treated as ONE
+ * unbreakable unit — we only add their BOTTOM as a candidate, never
+ * any position inside them.  This prevents the page-break from cutting
+ * horizontally across two columns at different heights.
+ */
+function collectSafeBreaks(root: HTMLElement, cloneTop: number): number[] {
+  const set = new Set<number>([0])
+
+  function walk(el: HTMLElement) {
+    const cs = window.getComputedStyle(el)
+    const isFlex = cs.display === 'flex' || cs.display === 'inline-flex'
+    const dir = cs.flexDirection || 'row'
+    const isFlexRow = isFlex && (dir === 'row' || dir === 'row-reverse')
+
+    if (isFlexRow) {
+      // Treat the whole row as one block — only its bottom is a safe break
+      const bottom = Math.round(el.getBoundingClientRect().bottom - cloneTop)
+      if (bottom > 0) set.add(bottom)
+      return  // do NOT recurse into columns
+    }
+
+    // Block / flex-column: each child's top is a candidate
+    Array.from(el.children).forEach((child) => {
+      const c = child as HTMLElement
+      const top = Math.round(c.getBoundingClientRect().top - cloneTop)
+      if (top > 10) set.add(top)
+      walk(c)
+    })
+  }
+
+  walk(root)
+  return Array.from(set).sort((a, b) => a - b)
+}
+
 export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const defaultFileName = fileName ||
-    `${resumeData.personalInfo.name.replace(/\s+/g, '_')}_Resume.pdf`
+  const defaultFileName =
+    fileName || `${resumeData.personalInfo.name.replace(/\s+/g, '_')}_Resume.pdf`
 
   async function handleDownload() {
     setIsLoading(true)
@@ -61,7 +95,7 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
       const element = document.getElementById('resume-preview-root')
       if (!element) throw new Error('Resume element not found.')
 
-      // ── 1. Clone at RENDER_W = 595px — same width as the live preview ────────
+      // ── Clone at RENDER_W = 595px (same as live preview) ─────────────────
       const clone = element.cloneNode(true) as HTMLElement
       clone.style.transform = 'none'
       clone.style.position = 'fixed'
@@ -73,21 +107,13 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
       clone.style.zIndex = '-1'
       document.body.appendChild(clone)
 
-      // Two rAFs so the browser finishes laying out the clone
       await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
 
-      // ── 2. Collect element top positions (safe break candidates) ──────────────
-      // Work in RENDER_W (595px) space throughout; convert to PDF space only
-      // when calling addImage.
+      // ── Collect break candidates (flex-row-aware) ─────────────────────────
       const cloneTop = clone.getBoundingClientRect().top
-      const breakSet = new Set<number>([0])
-      clone.querySelectorAll('div, p, ul, li, section').forEach((el) => {
-        const top = Math.round(el.getBoundingClientRect().top - cloneTop)
-        if (top > 0) breakSet.add(top)
-      })
-      const breaks = Array.from(breakSet).sort((a, b) => a - b)
+      const breaks = collectSafeBreaks(clone, cloneTop)
 
-      // ── 3. Render full clone to a 2× canvas ──────────────────────────────────
+      // ── Render full clone to 2× canvas ───────────────────────────────────
       const canvas = await html2canvas(clone, {
         scale: 2,
         useCORS: true,
@@ -97,13 +123,12 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
       })
       document.body.removeChild(clone)
 
-      // Content height in RENDER_W space (÷2 because canvas is 2×)
+      // Content height in RENDER_W (595px) space
       const contentH = canvas.height / 2
+      // How much 595px content fits on one PDF page (accounting for margins+scale)
+      const pageCapacity = INNER_H / SCALE   // ~860px
 
-      // How much RENDER_W content fits on one PDF page (inverse of SCALE)
-      const pageCapacity = INNER_H / SCALE   // ~860px in 595px space
-
-      // ── 4. Build PDF ──────────────────────────────────────────────────────────
+      // ── Build PDF ─────────────────────────────────────────────────────────
       const doc = new jsPDF({
         unit: 'px',
         format: [PAGE_W, PAGE_H],
@@ -111,29 +136,29 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
         hotfixes: ['px_scaling'],
       })
 
-      // Single-page when content (after SCALE) fits within INNER_H.
-      // Allow up to 20% overflow — jsPDF scales the image down to fit,
-      // text shrinks by ≤17% which is invisible at normal print sizes.
-      const singlePageLimit = pageCapacity * 1.2   // in 595px space
+      // Single-page limit: 1.3× page capacity.
+      // Content in that band is scaled down to fit — at most ~23% smaller,
+      // imperceptible at normal print sizes.  Prevents a near-blank 2nd page.
+      const SINGLE_PAGE_LIMIT = pageCapacity * 1.3
 
-      if (contentH <= singlePageLimit) {
-        // ── Single page ───────────────────────────────────────────────────────
+      if (contentH <= SINGLE_PAGE_LIMIT) {
+        // ── Single page ───────────────────────────────────────────────────
         const pdfH = Math.min(contentH * SCALE, INNER_H)
         const img = canvas.toDataURL('image/jpeg', 0.98)
         doc.addImage(img, 'JPEG', MARGIN, MARGIN, INNER_W, pdfH)
       } else {
-        // ── Multi-page: slice at safe section boundaries ──────────────────────
-        let pageStart = 0   // in 595px (RENDER_W) space
+        // ── Multi-page: slice only at flex-row-aware safe breaks ──────────
+        let pageStart = 0   // in 595px space
         let firstPage = true
 
         while (pageStart < contentH) {
           if (!firstPage) doc.addPage()
           firstPage = false
 
-          const remaining = contentH - pageStart        // 595px space
-          const remainingPdf = remaining * SCALE        // PDF space
+          const remaining = contentH - pageStart
+          const remainingPdf = remaining * SCALE
 
-          // All remaining fits on this page
+          // Everything left fits on this page
           if (remainingPdf <= INNER_H) {
             const slice = cropCanvas(canvas, pageStart, remaining)
             doc.addImage(slice.toDataURL('image/jpeg', 0.98),
@@ -141,24 +166,23 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
             break
           }
 
-          // Page boundary in 595px space
           const pageBottom = pageStart + pageCapacity
 
-          // Latest element boundary that falls before the page edge
+          // Latest SAFE break before the page edge
           const safeEnd = breaks
             .filter((b) => b > pageStart && b <= pageBottom)
             .pop() ?? pageBottom
 
-          // If what's left after the break is tiny, absorb it onto this page
+          // If leftover after the break is tiny, absorb it onto this page
           const leftoverPdf = (contentH - safeEnd) * SCALE
-          if (leftoverPdf > 0 && leftoverPdf < 80) {
+          if (leftoverPdf > 0 && leftoverPdf < 100) {
             const slice = cropCanvas(canvas, pageStart, remaining)
             doc.addImage(slice.toDataURL('image/jpeg', 0.98),
               'JPEG', MARGIN, MARGIN, INNER_W, INNER_H)
             break
           }
 
-          const sliceH = safeEnd - pageStart           // 595px space
+          const sliceH = safeEnd - pageStart
           const slice = cropCanvas(canvas, pageStart, sliceH)
           doc.addImage(slice.toDataURL('image/jpeg', 0.98),
             'JPEG', MARGIN, MARGIN, INNER_W, sliceH * SCALE)
@@ -193,12 +217,9 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
       @media print {
         body > *:not(#__resume-print-wrapper) { display: none !important; }
         #__resume-print-wrapper {
-          display: block !important;
-          position: fixed;
+          display: block !important; position: fixed;
           top: 0; left: 0; right: 0; bottom: 0;
-          z-index: 99999;
-          padding: ${MARGIN}px;
-          box-sizing: border-box;
+          z-index: 99999; padding: ${MARGIN}px; box-sizing: border-box;
         }
         #resume-preview-root { transform: none !important; width: 100% !important; box-shadow: none !important; }
         @page { size: A4; margin: 0; }
@@ -216,11 +237,11 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
       wrapper.appendChild(cloned)
       document.body.appendChild(wrapper)
     }
-    const originalTitle = document.title
+    const orig = document.title
     document.title = name
     window.print()
     setTimeout(() => {
-      document.title = originalTitle
+      document.title = orig
       document.getElementById('__resume-print-style')?.remove()
       wrapper?.remove()
     }, 1000)
@@ -239,7 +260,7 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
           fontSize: 14, fontWeight: 600,
           cursor: isLoading ? 'not-allowed' : 'pointer',
           fontFamily: 'system-ui, -apple-system, sans-serif',
-          transition: 'background 0.15s ease, opacity 0.15s ease',
+          transition: 'background 0.15s ease',
           opacity: isLoading ? 0.8 : 1,
           boxShadow: '0 2px 8px rgba(59,130,246,0.35)',
         }}
