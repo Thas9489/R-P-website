@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getUser } from '@/lib/session'
+import { createServerClient } from '@supabase/ssr'
 import { db } from '@/lib/db'
 import {
   generateSummary,
@@ -9,9 +9,27 @@ import {
   improveText,
 } from '@/lib/ai'
 
+export const runtime = 'edge'
+
+async function getUserFromReq(req: NextRequest) {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return req.cookies.getAll() },
+        setAll() {},
+      },
+    }
+  )
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) return null
+  return db.user.findByEmail(user.email)
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const user = await getUser()
+    const user = await getUserFromReq(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { type, context, resumeData } = await req.json()
@@ -51,7 +69,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid type' }, { status: 400 })
     }
 
-    // Deduct credit and log
     const newCredits = await db.user.decrementCredits(user.id)
     await db.creditLog.create(user.id, -1, 'used', `AI ${type} generation`)
 

@@ -1,19 +1,23 @@
-import axios from 'axios'
 import type { ResumeData } from '@/types'
 
-// Fallback chain — tried in order if the primary model is rate-limited
+// Fallback chain — tried in order if the primary model is rate-limited or slow
 const FALLBACK_MODELS = [
   'google/gemma-4-26b-a4b-it:free',
   'google/gemma-4-31b-it:free',
-  'nvidia/nemotron-3-super-120b-a12b:free',
-  'openai/gpt-oss-20b:free',
-  'openai/gpt-oss-120b:free',
+  'meta-llama/llama-3.1-8b-instruct:free',
+  'mistralai/mistral-7b-instruct:free',
+  'qwen/qwen-2.5-7b-instruct:free',
 ]
 
 async function callOpenRouter(model: string, prompt: string, maxTokens: number): Promise<string> {
-  const res = await axios.post(
-    'https://openrouter.ai/api/v1/chat/completions',
-    {
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    },
+    body: JSON.stringify({
       model,
       messages: [
         {
@@ -23,17 +27,17 @@ async function callOpenRouter(model: string, prompt: string, maxTokens: number):
         { role: 'user', content: prompt },
       ],
       max_tokens: maxTokens,
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001',
-      },
-      timeout: 30000,
-    }
-  )
-  const content = res.data.choices?.[0]?.message?.content
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    const status = res.status
+    throw Object.assign(new Error(err?.error?.message ?? `HTTP ${status}`), { status })
+  }
+
+  const data = await res.json()
+  const content = data.choices?.[0]?.message?.content
   if (!content) throw new Error('Empty response from model')
   return content
 }
@@ -49,11 +53,10 @@ async function generateText(prompt: string, maxTokens = 1024): Promise<string> {
       try {
         return await callOpenRouter(model, prompt, maxTokens)
       } catch (err) {
-        const status = axios.isAxiosError(err) ? err.response?.status : null
+        const status = (err as { status?: number }).status
         const isEmpty = err instanceof Error && err.message === 'Empty response from model'
-        // 429 = rate limited, 404 = model unavailable, empty = model refused — try next
         if (status === 429 || status === 404 || isEmpty) {
-          console.warn(`[AI] ${model} unavailable (${isEmpty ? 'empty response' : status}), trying next model…`)
+          console.warn(`[AI] ${model} unavailable (${isEmpty ? 'empty response' : status}), trying next…`)
           continue
         }
         throw err
@@ -63,37 +66,40 @@ async function generateText(prompt: string, maxTokens = 1024): Promise<string> {
   }
 
   if (provider === 'gemini') {
-    const res = await axios.post(
+    const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      { contents: [{ parts: [{ text: prompt }] }] }
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+      }
     )
-    return res.data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const data = await res.json()
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
   }
 
   // Default: OpenAI
-  const res = await axios.post(
-    'https://api.openai.com/v1/chat/completions',
-    {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
       model: process.env.AI_MODEL || 'gpt-4-turbo-preview',
       messages: [
         {
           role: 'system',
-          content:
-            'You are an expert resume writer and career coach. Write professional, ATS-optimized content. Be concise and impactful.',
+          content: 'You are an expert resume writer and career coach. Write professional, ATS-optimized content. Be concise and impactful.',
         },
         { role: 'user', content: prompt },
       ],
       max_tokens: maxTokens,
       temperature: 0.7,
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-    }
-  )
-  return res.data.choices[0]?.message?.content || ''
+    }),
+  })
+  const data = await res.json()
+  return data.choices[0]?.message?.content || ''
 }
 
 export async function generateSummary(
@@ -119,7 +125,6 @@ Rules:
 - Start directly with the summary text`
 
   const result = await generateText(prompt, 200)
-  // Strip any accidental preamble like "Here is..." or "Summary:"
   const cleaned = result
     .replace(/^(here'?s?|summary[:\-]?|professional summary[:\-]?|sure[,!]?).*/i, '')
     .replace(/^[\s\-–:]+/, '')
@@ -243,7 +248,6 @@ Return a JSON object with:
     if (match) return JSON.parse(match[0])
   } catch {}
 
-  // Fallback: simple keyword matching
   const words = jobDescription.toLowerCase().split(/\W+/).filter((w) => w.length > 4)
   const found = words.filter((w) => resumeText.includes(w)).slice(0, 10)
   const missing = words.filter((w) => !resumeText.includes(w)).slice(0, 10)
