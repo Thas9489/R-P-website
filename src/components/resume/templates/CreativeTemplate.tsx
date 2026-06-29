@@ -47,6 +47,7 @@ export function CreativeTemplate({ resumeData }: Props) {
   const { personalInfo, summary, experience, education, projects, skills } = resumeData
   const certifications = resumeData.certifications ?? []
   const awards = resumeData.awards ?? []
+  const references = resumeData.references ?? []
 
   const contactParts = [
     personalInfo.email && `✉ ${personalInfo.email}`,
@@ -284,6 +285,30 @@ export function CreativeTemplate({ resumeData }: Props) {
                     <div key={award.id}>
                       <div style={{ fontSize: 10.5, fontWeight: 600 }}>{award.title}</div>
                       <div style={{ fontSize: 10, color: '#777' }}>{award.issuer} · {award.date}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {references.length > 0 && (
+              <div
+                style={{
+                  background: '#fff',
+                  borderRadius: 8,
+                  padding: '16px 18px',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
+                }}
+              >
+                <SectionHeader title="References" index={5} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {references.map((ref) => (
+                    <div key={ref.id}>
+                      <div style={{ fontSize: 10.5, fontWeight: 600 }}>{ref.name}</div>
+                      <div style={{ fontSize: 10, color: '#555', fontStyle: 'italic' }}>{ref.title}, {ref.company}</div>
+                      {(ref.email || ref.phone) && (
+                        <div style={{ fontSize: 9.5, color: '#999' }}>{[ref.email, ref.phone].filter(Boolean).join(' · ')}</div>
+                      )}
                     </div>
                   ))}
                 </div>

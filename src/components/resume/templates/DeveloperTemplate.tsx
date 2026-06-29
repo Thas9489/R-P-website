@@ -104,6 +104,8 @@ function RepoCard({ proj, index }: { proj: { name: string; description: string; 
 export function DeveloperTemplate({ resumeData }: Props) {
   const { personalInfo, summary, experience, education, projects, skills } = resumeData
   const certifications = resumeData.certifications ?? []
+  const awards = resumeData.awards ?? []
+  const references = resumeData.references ?? []
 
   const skillsByCategory = skills.reduce<Record<string, string[]>>((acc, s) => {
     const cat = s.category || 'General'
@@ -268,6 +270,51 @@ export function DeveloperTemplate({ resumeData }: Props) {
                     <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>
                       {cert.issuer} · {cert.date}
                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Awards */}
+          {awards.length > 0 && (
+            <div>
+              <SectionTitle color={GREEN}>awards</SectionTitle>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {awards.map((award) => (
+                  <div
+                    key={award.id}
+                    style={{
+                      padding: '6px 8px',
+                      background: '#1e293b',
+                      borderRadius: 4,
+                      borderLeft: `3px solid ${GREEN}`,
+                    }}
+                  >
+                    <div style={{ fontSize: 10, fontWeight: 600, color: '#e2e8f0' }}>{award.title}</div>
+                    <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>
+                      {award.issuer} · {award.date}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* References */}
+          {references.length > 0 && (
+            <div>
+              <SectionTitle color={PURPLE}>refs</SectionTitle>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {references.map((ref) => (
+                  <div key={ref.id}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: '#e2e8f0' }}>{ref.name}</div>
+                    <div style={{ fontSize: 9, color: '#7dd3fc', fontFamily: 'monospace' }}>
+                      {ref.title}, {ref.company}
+                    </div>
+                    {(ref.email || ref.phone) && (
+                      <div style={{ fontSize: 9, color: '#64748b' }}>{[ref.email, ref.phone].filter(Boolean).join(' · ')}</div>
+                    )}
                   </div>
                 ))}
               </div>

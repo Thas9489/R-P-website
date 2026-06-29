@@ -36,6 +36,7 @@ export function MinimalTemplate({ resumeData }: Props) {
   const { personalInfo, summary, experience, education, projects, skills } = resumeData
   const certifications = resumeData.certifications ?? []
   const awards = resumeData.awards ?? []
+  const references = resumeData.references ?? []
 
   const contactParts = [
     personalInfo.email,
@@ -298,7 +299,7 @@ export function MinimalTemplate({ resumeData }: Props) {
       {awards.length > 0 && (
         <>
           <SectionTitle>Awards</SectionTitle>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
             {awards.map((award) => (
               <div key={award.id} style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 10.5, fontWeight: 600 }}>
@@ -306,6 +307,27 @@ export function MinimalTemplate({ resumeData }: Props) {
                   <span style={{ fontWeight: 400, color: '#555' }}>— {award.issuer}</span>
                 </span>
                 <span style={{ fontSize: 10, color: '#777' }}>{award.date}</span>
+              </div>
+            ))}
+          </div>
+          <HR />
+        </>
+      )}
+
+      {/* References */}
+      {references.length > 0 && (
+        <>
+          <SectionTitle>References</SectionTitle>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {references.map((ref) => (
+              <div key={ref.id}>
+                <div style={{ fontSize: 10.5, fontWeight: 600 }}>
+                  {ref.name}{' '}
+                  <span style={{ fontWeight: 400, color: '#555' }}>— {ref.title}, {ref.company}</span>
+                </div>
+                {(ref.email || ref.phone) && (
+                  <div style={{ fontSize: 10, color: '#777' }}>{[ref.email, ref.phone].filter(Boolean).join(' · ')}</div>
+                )}
               </div>
             ))}
           </div>

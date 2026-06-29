@@ -80,6 +80,8 @@ function SkillTag({ name }: { name: string }) {
 export function ModernTemplate({ resumeData }: Props) {
   const { personalInfo, summary, experience, education, projects, skills } = resumeData
   const certifications = resumeData.certifications ?? []
+  const awards = resumeData.awards ?? []
+  const references = resumeData.references ?? []
 
   const contactItems = [
     { icon: ICONS.email, value: personalInfo.email },
@@ -358,6 +360,48 @@ export function ModernTemplate({ resumeData }: Props) {
                       </span>
                     ))}
                   </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Awards */}
+        {awards.length > 0 && (
+          <div>
+            <SectionHeader title="Awards" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {awards.map((award) => (
+                <div key={award.id}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{award.title}</div>
+                      <div style={{ fontSize: 11, color: BLUE, fontWeight: 500 }}>{award.issuer}</div>
+                    </div>
+                    <div style={{ fontSize: 10, color: '#888', whiteSpace: 'nowrap', marginLeft: 8 }}>{award.date}</div>
+                  </div>
+                  {award.description && (
+                    <p style={{ fontSize: 10.5, color: '#555', margin: '3px 0 0 0', lineHeight: 1.4 }}>{award.description}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* References */}
+        {references.length > 0 && (
+          <div>
+            <SectionHeader title="References" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {references.map((ref) => (
+                <div key={ref.id}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{ref.name}</div>
+                  <div style={{ fontSize: 11, color: BLUE, fontWeight: 500 }}>{ref.title}, {ref.company}</div>
+                  {ref.relationship && <div style={{ fontSize: 10, color: '#666' }}>{ref.relationship}</div>}
+                  {(ref.email || ref.phone) && (
+                    <div style={{ fontSize: 10, color: '#888' }}>{[ref.email, ref.phone].filter(Boolean).join(' · ')}</div>
+                  )}
                 </div>
               ))}
             </div>
