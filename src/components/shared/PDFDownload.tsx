@@ -83,13 +83,14 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
         clone.style.zIndex = '-1'
         document.body.appendChild(clone)
 
-        // Wait one frame for layout to settle, then measure real height
+        // Wait two frames for layout to fully settle
         await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
         const contentHeight = clone.scrollHeight
 
-        // If content fits on one page use exact height, otherwise use A4 with smart page breaks
         const A4_HEIGHT = 842
-        const fitsOnOnePage = contentHeight <= A4_HEIGHT + 20 // 20px buffer
+        // Treat anything up to 1.25× A4 as single-page — avoids cuts on
+        // resumes with a small overflow (a few lines into a second page)
+        const SINGLE_PAGE_THRESHOLD = Math.round(A4_HEIGHT * 1.25) // ~1052px
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const options: any = {
@@ -105,14 +106,20 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
           },
           jsPDF: {
             unit: 'px',
-            format: [595, fitsOnOnePage ? contentHeight : A4_HEIGHT],
+            format: [595, contentHeight <= SINGLE_PAGE_THRESHOLD ? Math.max(contentHeight, A4_HEIGHT) : A4_HEIGHT],
             orientation: 'portrait',
             hotfixes: ['px_scaling'],
           },
         }
 
-        // For multi-page: avoid cutting sections in the middle
-        if (!fitsOnOnePage) {
+        if (contentHeight > SINGLE_PAGE_THRESHOLD) {
+          // Truly multi-page: inject break-inside: avoid on every content
+          // wrapper so html2pdf never slices through an element
+          clone.querySelectorAll('div, p, ul, li').forEach((el) => {
+            const h = el as HTMLElement
+            h.style.breakInside = 'avoid'
+            h.style.pageBreakInside = 'avoid'
+          })
           options.pagebreak = { mode: ['avoid-all'] }
         }
 
