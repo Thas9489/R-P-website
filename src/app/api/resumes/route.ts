@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getUser } from '@/lib/session'
 import { db } from '@/lib/db'
 import type { ResumeData } from '@/types'
 
@@ -18,9 +17,9 @@ const emptyData: ResumeData = {
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    const resumes = await db.resume.findMany(session.user.id)
+    const user = await getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const resumes = await db.resume.findMany(user.id)
     return NextResponse.json({ resumes })
   } catch (err) {
     console.error('[RESUMES_GET]', err)
@@ -30,13 +29,13 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const user = await getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { title, template = 'modern', data } = await req.json()
     if (!title) return NextResponse.json({ error: 'Title is required' }, { status: 400 })
 
-    const resume = await db.resume.create(session.user.id, title, template, data ?? emptyData)
+    const resume = await db.resume.create(user.id, title, template, data ?? emptyData)
     return NextResponse.json({ resume }, { status: 201 })
   } catch (err) {
     console.error('[RESUMES_POST]', err)

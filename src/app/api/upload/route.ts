@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getUser } from '@/lib/session'
 import { getServerSupabase } from '@/lib/supabase'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
@@ -8,8 +7,8 @@ const MAX_SIZE = 5 * 1024 * 1024 // 5 MB
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const user = await getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const formData = await req.formData()
     const file = formData.get('file') as File | null
@@ -24,7 +23,7 @@ export async function POST(req: NextRequest) {
     }
 
     const ext = file.name.split('.').pop() ?? 'jpg'
-    const path = `${session.user.id}/${type}/${Date.now()}.${ext}`
+    const path = `${user.id}/${type}/${Date.now()}.${ext}`
 
     const bytes = await file.arrayBuffer()
     const supabase = getServerSupabase()

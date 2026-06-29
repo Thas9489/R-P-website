@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { signIn } from 'next-auth/react'
 import { createBrowserClient } from '@/lib/supabase'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -91,23 +90,39 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: RegisterFormValues) => {
     try {
+      const supabase = createBrowserClient()
+
+      // Create Supabase Auth account
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: { data: { full_name: data.name } },
+      })
+      if (signUpError) {
+        toast.error(signUpError.message)
+        return
+      }
+
+      // Create our public.users record (username, name, credits etc.)
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: data.name, email: data.email, username: data.username, password: data.password }),
+        body: JSON.stringify({ name: data.name, email: data.email, username: data.username }),
       })
       const json = await res.json()
       if (!res.ok) {
         toast.error(json.error ?? 'Registration failed. Please try again.')
         return
       }
-      toast.success('Account created! Signing you in…')
-      const result = await signIn('credentials', { email: data.email, password: data.password, redirect: false })
-      if (result?.error) {
-        toast.error('Account created but sign-in failed. Please log in manually.')
+
+      // If email confirmation is required, Supabase won't auto sign in
+      if (!signUpData.session) {
+        toast.success('Account created! Check your email to confirm, then sign in.')
         router.push('/login')
         return
       }
+
+      toast.success('Account created! Welcome aboard 🎉')
       router.push('/dashboard')
       router.refresh()
     } catch {

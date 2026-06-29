@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getUser } from '@/lib/session'
 import { db } from '@/lib/db'
 
 async function guard(id: string, userId: string) {
@@ -12,9 +11,9 @@ async function guard(id: string, userId: string) {
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    const { resume, error, status } = await guard(params.id, session.user.id)
+    const user = await getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { resume, error, status } = await guard(params.id, user.id)
     if (error) return NextResponse.json({ error }, { status })
     return NextResponse.json({ resume })
   } catch (err) {
@@ -25,9 +24,9 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    const { error, status } = await guard(params.id, session.user.id)
+    const user = await getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { error, status } = await guard(params.id, user.id)
     if (error) return NextResponse.json({ error }, { status })
 
     const { title, template, data } = await req.json()
@@ -41,9 +40,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
 export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    const { error, status } = await guard(params.id, session.user.id)
+    const user = await getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { error, status } = await guard(params.id, user.id)
     if (error) return NextResponse.json({ error }, { status })
     await db.resume.delete(params.id)
     return NextResponse.json({ success: true })

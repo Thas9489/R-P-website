@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useTransition } from 'react';
-import { useSession } from 'next-auth/react';
+import { useUser } from '@/hooks/useUser';
 import { useTheme } from 'next-themes';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -46,11 +46,10 @@ const CREDIT_HISTORY = [
 // ─── Tab content components ───────────────────────────────────────────────────
 
 function ProfileTab() {
-  const { data: session, update } = useSession();
-  const user = session?.user;
+  const { user, refresh } = useUser();
 
   const [name, setName] = useState(user?.name ?? '');
-  const [username, setUsername] = useState((user as { username?: string })?.username ?? '');
+  const [username, setUsername] = useState(user?.username ?? '');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [saving, startSave] = useTransition();
   const [saved, setSaved] = useState(false);
@@ -85,8 +84,12 @@ function ProfileTab() {
 
   const handleSave = () => {
     startSave(async () => {
-      // Persist name/username changes — extend with real API call as needed
-      await update({ name, username });
+      await fetch('/api/user/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, username }),
+      });
+      await refresh();
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     });
@@ -319,8 +322,8 @@ function AppearanceTab() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BillingTab() {
-  const { data: session } = useSession();
-  const credits = (session?.user as { credits?: number })?.credits ?? 0;
+  const { user } = useUser();
+  const credits = user?.credits ?? 0;
   const creditPct = Math.min(100, (credits / 100) * 100);
 
   const PLANS = [

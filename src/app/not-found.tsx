@@ -2,10 +2,10 @@
 
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { useSession } from 'next-auth/react'
+import { useUser } from '@/hooks/useUser'
 
 export default function NotFound() {
-  const { data: session } = useSession()
+  const { user } = useUser()
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950 flex flex-col items-center justify-center px-4 relative overflow-hidden">
@@ -76,7 +76,7 @@ export default function NotFound() {
             Go back home
           </Link>
 
-          {session ? (
+          {user ? (
             <Link
               href="/dashboard"
               className="inline-flex items-center gap-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 font-semibold px-6 py-3 rounded-xl transition-colors text-sm"

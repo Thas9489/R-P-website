@@ -1,27 +1,20 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getUser } from '@/lib/session'
 import { db } from '@/lib/db'
 import { redirect } from 'next/navigation'
 import ResumeListClient from './_components/ResumeListClient'
-import type { Resume } from '@/types'
 
 export const metadata = { title: 'My Resumes' }
 
-async function getResumes(userId: string): Promise<Resume[]> {
-  return db.resume.findMany(userId)
-}
-
 export default async function ResumesPage() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) redirect('/login')
+  const user = await getUser()
+  if (!user) redirect('/login')
 
-  const resumes = await getResumes(session.user.id)
+  const resumes = await db.resume.findMany(user.id)
 
   return (
     <div>
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">

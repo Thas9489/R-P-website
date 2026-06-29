@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useSession, signOut } from 'next-auth/react';
+import { useUser } from '@/hooks/useUser';
+import { createBrowserClient } from '@/lib/supabase';
 import { useTheme } from 'next-themes';
 import {
   Sun,
@@ -35,8 +36,14 @@ function getInitials(name?: string | null, email?: string | null): string {
 }
 
 export default function Navbar() {
-  const { data: session } = useSession();
+  const { user } = useUser();
   const { theme, setTheme, resolvedTheme } = useTheme();
+
+  const handleSignOut = async () => {
+    const supabase = createBrowserClient()
+    await supabase.auth.signOut()
+    window.location.href = '/'
+  };
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -105,7 +112,7 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop Nav Links (only when logged out) */}
-          {!session && (
+          {!user && (
             <nav className="hidden md:flex items-center gap-6">
               {navLinks.map((link) => (
                 <a
@@ -134,7 +141,7 @@ export default function Navbar() {
               )}
             </button>
 
-            {session ? (
+            {user ? (
               /* Authenticated: Dashboard + Avatar Dropdown */
               <div className="hidden md:flex items-center gap-3">
                 <Link
@@ -155,7 +162,7 @@ export default function Navbar() {
                     aria-label="User menu"
                   >
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold shrink-0">
-                      {getInitials(session.user?.name, session.user?.email)}
+                      {getInitials(user?.name, user?.email)}
                     </div>
                     <ChevronDown
                       size={14}
@@ -177,10 +184,10 @@ export default function Navbar() {
                         {/* User info */}
                         <div className="px-3 py-2 border-b border-border mb-1">
                           <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
-                            {session.user?.name ?? 'User'}
+                            {user?.name ?? 'User'}
                           </p>
                           <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {session.user?.email}
+                            {user?.email}
                           </p>
                         </div>
 
@@ -194,7 +201,7 @@ export default function Navbar() {
                         </Link>
                         <div className="border-t border-border mt-1 pt-1">
                           <button
-                            onClick={() => signOut({ callbackUrl: '/' })}
+                            onClick={handleSignOut}
                             className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                           >
                             <LogOut size={15} />
@@ -249,7 +256,7 @@ export default function Navbar() {
           >
             <div className="px-4 py-4 space-y-1">
               {/* Nav links (unauthenticated) */}
-              {!session &&
+              {!user &&
                 navLinks.map((link) => (
                   <a
                     key={link.href}
@@ -261,19 +268,19 @@ export default function Navbar() {
                   </a>
                 ))}
 
-              {session ? (
+              {user ? (
                 <>
                   {/* User info */}
                   <div className="flex items-center gap-3 px-3 py-2 mb-2">
                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold shrink-0">
-                      {getInitials(session.user?.name, session.user?.email)}
+                      {getInitials(user?.name, user?.email)}
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                        {session.user?.name ?? 'User'}
+                        {user?.name ?? 'User'}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {session.user?.email}
+                        {user?.email}
                       </p>
                     </div>
                   </div>
@@ -288,7 +295,7 @@ export default function Navbar() {
                   </Link>
                   <div className="pt-2 border-t border-border mt-2">
                     <button
-                      onClick={() => signOut({ callbackUrl: '/' })}
+                      onClick={handleSignOut}
                       className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                     >
                       <LogOut size={16} />

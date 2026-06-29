@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { signIn } from 'next-auth/react'
 import { createBrowserClient } from '@/lib/supabase'
 
 export default function AuthCallbackPage() {
@@ -18,17 +17,21 @@ export default function AuthCallbackPage() {
         return
       }
 
-      const result = await signIn('supabase-oauth', {
-        email: session.user.email,
-        accessToken: session.access_token,
-        redirect: false,
+      // Ensure the user exists in our public.users table
+      const email = session.user.email
+      const name =
+        (session.user.user_metadata?.full_name as string) ||
+        (session.user.user_metadata?.name as string) ||
+        email.split('@')[0]
+      const image = (session.user.user_metadata?.avatar_url as string) || null
+
+      await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, name, image }),
       })
 
-      if (result?.error) {
-        router.replace('/login?error=OAuthCallback')
-      } else {
-        router.replace('/dashboard')
-      }
+      router.replace('/dashboard')
     }
 
     handle()

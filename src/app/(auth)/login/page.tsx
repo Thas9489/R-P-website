@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { signIn } from 'next-auth/react'
 import { createBrowserClient } from '@/lib/supabase'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -45,14 +44,37 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormValues) => {
     try {
-      const result = await signIn('credentials', {
+      const supabase = createBrowserClient()
+      const { error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
-        redirect: false,
       })
-      if (result?.error) {
-        toast.error('Invalid email or password. Please try again.')
-        return
+      if (error) {
+        // Attempt seamless migration for users registered before Supabase Auth
+        if (error.message.toLowerCase().includes('invalid login credentials')) {
+          const migRes = await fetch('/api/auth/migrate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: data.email, password: data.password }),
+          })
+          if (migRes.ok) {
+            // Migration succeeded — try signing in again
+            const { error: retryErr } = await supabase.auth.signInWithPassword({
+              email: data.email,
+              password: data.password,
+            })
+            if (retryErr) {
+              toast.error('Invalid email or password. Please try again.')
+              return
+            }
+          } else {
+            toast.error('Invalid email or password. Please try again.')
+            return
+          }
+        } else {
+          toast.error(error.message)
+          return
+        }
       }
       toast.success('Welcome back!')
       router.push('/dashboard')
