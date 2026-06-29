@@ -3,7 +3,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import type { Portfolio, Resume, PortfolioTheme } from '@/types'
+import type { Portfolio, Resume, PortfolioTheme, ResumeData } from '@/types'
+import ModernTheme from '@/components/portfolio/themes/ModernTheme'
+import MinimalTheme from '@/components/portfolio/themes/MinimalTheme'
+import DeveloperTheme from '@/components/portfolio/themes/DeveloperTheme'
+import CreativeTheme from '@/components/portfolio/themes/CreativeTheme'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -14,7 +18,17 @@ const THEMES: { value: PortfolioTheme; label: string; description: string; previ
   { value: 'creative',  label: 'Creative',  description: 'Vibrant, colorful, expressive', preview: 'bg-gradient-to-br from-purple-500 to-pink-600' },
 ]
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+// ─── Theme preview renderer ───────────────────────────────────────────────────
+
+function PortfolioPreview({ theme, resumeData, slug }: { theme: PortfolioTheme; resumeData: ResumeData; slug: string }) {
+  const props = { resumeData, slug }
+  switch (theme) {
+    case 'minimal':   return <MinimalTheme {...props} />
+    case 'developer': return <DeveloperTheme {...props} />
+    case 'creative':  return <CreativeTheme {...props} />
+    default:          return <ModernTheme {...props} />
+  }
+}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -108,7 +122,6 @@ function SettingsPanel({
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  // Sync local state when the portfolio prop is replaced (e.g. after a save returns updated data)
   useEffect(() => {
     setSlug(portfolio.slug)
     setTheme(portfolio.theme as PortfolioTheme)
@@ -296,6 +309,12 @@ export default function PortfolioPage() {
   const [selectedTheme, setSelectedTheme] = useState<PortfolioTheme>('modern')
   const [generating, setGenerating] = useState(false)
   const [showShare, setShowShare] = useState(false)
+  // Resolved client-side so the URL always reflects the actual origin
+  const [appUrl, setAppUrl] = useState('')
+
+  useEffect(() => {
+    setAppUrl(process.env.NEXT_PUBLIC_APP_URL || window.location.origin)
+  }, [])
 
   const fetchData = useCallback(async () => {
     try {
@@ -315,7 +334,11 @@ export default function PortfolioPage() {
     if (!selectedResume) { toast.error('Please select a resume'); return }
     setGenerating(true)
     try {
-      const res = await fetch('/api/portfolio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resumeId: selectedResume, theme: selectedTheme }) })
+      const res = await fetch('/api/portfolio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resumeId: selectedResume, theme: selectedTheme }),
+      })
       if (!res.ok) throw new Error()
       const { portfolio: p } = await res.json()
       setPortfolio(p)
@@ -324,7 +347,8 @@ export default function PortfolioPage() {
     finally { setGenerating(false) }
   }
 
-  const publicUrl = portfolio ? `${APP_URL}/portfolio/${portfolio.slug}` : ''
+  const publicUrl = portfolio && appUrl ? `${appUrl}/portfolio/${portfolio.slug}` : ''
+  const resumeData = (portfolio?.resume?.data as ResumeData | undefined) ?? null
 
   if (loadState === 'loading') {
     return (
@@ -377,55 +401,100 @@ export default function PortfolioPage() {
                 </div>
               </div>
               <button onClick={handleGenerate} disabled={generating || !selectedResume} className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-colors">
-                {generating ? (<><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generating…</>) : (<><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>Generate Portfolio</>)}
+                {generating
+                  ? (<><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generating…</>)
+                  : (<><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>Generate Portfolio</>)
+                }
               </button>
             </div>
           </motion.div>
         ) : (
           <motion.div key="exists" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left column: stats + URL bar + portfolio preview */}
             <div className="lg:col-span-2 flex flex-col gap-5">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <StatCard icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>} label="Total Views" value={portfolio.views.toLocaleString()} />
-                <StatCard icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>} label="Last Updated" value={new Date(portfolio.updatedAt).toLocaleDateString()} />
-                <StatCard icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>} label="Status" value={portfolio.isPublic ? 'Public' : 'Private'} />
+                <StatCard
+                  icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
+                  label="Total Views" value={portfolio.views.toLocaleString()}
+                />
+                <StatCard
+                  icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>}
+                  label="Last Updated" value={new Date(portfolio.updatedAt).toLocaleDateString()}
+                />
+                <StatCard
+                  icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>}
+                  label="Status" value={portfolio.isPublic ? 'Public' : 'Private'}
+                />
               </div>
 
+              {/* Public URL bar */}
               <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-4">
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Public URL</p>
                 <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 flex-wrap">
-                  <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate font-mono">{publicUrl}</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate font-mono">
+                    {publicUrl || `…/portfolio/${portfolio.slug}`}
+                  </span>
                   <div className="flex gap-2">
-                    <CopyButton text={publicUrl} />
-                    <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors">
-                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                      Open
-                    </a>
-                    <button onClick={() => setShowShare(true)} className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-                      Share
-                    </button>
+                    {publicUrl && <CopyButton text={publicUrl} />}
+                    {publicUrl && (
+                      <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors">
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        Open
+                      </a>
+                    )}
+                    {publicUrl && (
+                      <button onClick={() => setShowShare(true)} className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                        Share
+                      </button>
+                    )}
                   </div>
                 </div>
+                {!portfolio.isPublic && (
+                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                    Portfolio is private — enable &ldquo;Public Portfolio&rdquo; in settings so others can view it
+                  </p>
+                )}
               </div>
 
+              {/* Portfolio preview — renders the theme component directly */}
               <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-                  <div className="flex gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-red-400" /><div className="w-2.5 h-2.5 rounded-full bg-yellow-400" /><div className="w-2.5 h-2.5 rounded-full bg-green-400" /></div>
-                  <span className="text-xs text-gray-400 font-mono truncate flex-1 text-center">{publicUrl}</span>
+                {/* Fake browser chrome */}
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/80">
+                  <div className="flex gap-1.5">
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-green-400" />
+                  </div>
+                  <span className="text-xs text-gray-400 font-mono truncate flex-1 text-center">
+                    {publicUrl || `/portfolio/${portfolio.slug}`}
+                  </span>
                 </div>
-                <div className="h-[400px]">
-                  {portfolio.isPublic ? (
-                    <iframe key={portfolio.updatedAt} src={publicUrl} className="w-full h-full border-none" title="Portfolio preview" sandbox="allow-scripts allow-same-origin" />
+
+                {/* Theme rendered directly — scroll to explore */}
+                <div className="h-[480px] overflow-y-auto overflow-x-hidden">
+                  {resumeData ? (
+                    <PortfolioPreview
+                      key={`${portfolio.theme}-${portfolio.resumeId}`}
+                      theme={portfolio.theme as PortfolioTheme}
+                      resumeData={resumeData}
+                      slug={portfolio.slug}
+                    />
                   ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                      <svg className="w-10 h-10 mb-3 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-                      <p className="text-sm">Portfolio is set to private</p>
-                      <p className="text-xs mt-1">Enable &ldquo;Public Portfolio&rdquo; in settings to share it</p>
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3">
+                      <svg className="w-10 h-10 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                      </svg>
+                      <p className="text-sm">No resume attached</p>
+                      <p className="text-xs">Select a resume in settings and save</p>
                     </div>
                   )}
                 </div>
               </div>
             </div>
+
+            {/* Right column: settings */}
             <div className="lg:col-span-1">
               <SettingsPanel
                 portfolio={portfolio}
@@ -439,7 +508,9 @@ export default function PortfolioPage() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {showShare && portfolio && <ShareModal url={publicUrl} onClose={() => setShowShare(false)} />}
+        {showShare && portfolio && publicUrl && (
+          <ShareModal url={publicUrl} onClose={() => setShowShare(false)} />
+        )}
       </AnimatePresence>
     </div>
   )
