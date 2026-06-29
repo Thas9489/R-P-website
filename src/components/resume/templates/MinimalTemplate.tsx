@@ -33,7 +33,9 @@ function formatDate(start: string, end: string, current: boolean) {
 }
 
 export function MinimalTemplate({ resumeData }: Props) {
-  const { personalInfo, summary, experience, education, projects, skills, certifications, awards } = resumeData
+  const { personalInfo, summary, experience, education, projects, skills } = resumeData
+  const certifications = resumeData.certifications ?? []
+  const awards = resumeData.awards ?? []
 
   const contactParts = [
     personalInfo.email,

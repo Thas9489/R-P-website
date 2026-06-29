@@ -44,7 +44,9 @@ function SectionHeader({ title, index }: { title: string; index: number }) {
 }
 
 export function CreativeTemplate({ resumeData }: Props) {
-  const { personalInfo, summary, experience, education, projects, skills, certifications, awards } = resumeData
+  const { personalInfo, summary, experience, education, projects, skills } = resumeData
+  const certifications = resumeData.certifications ?? []
+  const awards = resumeData.awards ?? []
 
   const contactParts = [
     personalInfo.email && `✉ ${personalInfo.email}`,

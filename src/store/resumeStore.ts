@@ -164,7 +164,7 @@ export const useResumeStore = create<ResumeStore>()(
         set((s) => ({ resumeData: { ...s.resumeData, references: s.resumeData.references.filter((r) => r.id !== id) }, isDirty: true })),
 
       loadResume: ({ id, title, template, data }) =>
-        set({ resumeId: id, title, template: template as ResumeTemplate, resumeData: data, isDirty: false }),
+        set({ resumeId: id, title, template: template as ResumeTemplate, resumeData: { ...defaultResumeData, ...data }, isDirty: false }),
     }),
     { name: 'resume-store', partialize: (s) => ({ resumeId: s.resumeId, title: s.title, template: s.template, resumeData: s.resumeData }) }
   )

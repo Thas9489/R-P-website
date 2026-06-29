@@ -43,7 +43,10 @@ function formatDate(start: string, end: string, current: boolean) {
 }
 
 export function ExecutiveTemplate({ resumeData }: Props) {
-  const { personalInfo, summary, experience, education, projects, skills, certifications, awards, references } = resumeData
+  const { personalInfo, summary, experience, education, projects, skills } = resumeData
+  const certifications = resumeData.certifications ?? []
+  const awards = resumeData.awards ?? []
+  const references = resumeData.references ?? []
 
   const contactParts = [
     personalInfo.email,

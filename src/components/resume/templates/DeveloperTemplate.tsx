@@ -102,7 +102,8 @@ function RepoCard({ proj, index }: { proj: { name: string; description: string; 
 }
 
 export function DeveloperTemplate({ resumeData }: Props) {
-  const { personalInfo, summary, experience, education, projects, skills, certifications } = resumeData
+  const { personalInfo, summary, experience, education, projects, skills } = resumeData
+  const certifications = resumeData.certifications ?? []
 
   const skillsByCategory = skills.reduce<Record<string, string[]>>((acc, s) => {
     const cat = s.category || 'General'

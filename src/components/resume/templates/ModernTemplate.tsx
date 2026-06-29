@@ -78,7 +78,8 @@ function SkillTag({ name }: { name: string }) {
 }
 
 export function ModernTemplate({ resumeData }: Props) {
-  const { personalInfo, summary, experience, education, projects, skills, certifications } = resumeData
+  const { personalInfo, summary, experience, education, projects, skills } = resumeData
+  const certifications = resumeData.certifications ?? []
 
   const contactItems = [
     { icon: ICONS.email, value: personalInfo.email },
