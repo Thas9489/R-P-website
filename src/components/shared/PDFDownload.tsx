@@ -62,29 +62,37 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
     setError(null)
 
     try {
-      // Attempt html2pdf.js approach (dynamic import for SSR safety)
       const html2pdfModule = await import('html2pdf.js').catch(() => null)
 
       if (html2pdfModule) {
         const html2pdf = html2pdfModule.default
 
-        // Find the resume DOM element
         const element = document.getElementById('resume-preview-root')
         if (!element) {
           throw new Error('Resume element not found. Make sure ResumePreview is mounted.')
         }
 
-        // Clone the element at 1:1 scale so PDF captures full content
+        // Clone at 1:1 scale, off-screen
         const clone = element.cloneNode(true) as HTMLElement
         clone.style.transform = 'none'
         clone.style.position = 'fixed'
         clone.style.top = '-9999px'
         clone.style.left = '-9999px'
         clone.style.width = '595px'
+        clone.style.overflow = 'visible'
         clone.style.zIndex = '-1'
         document.body.appendChild(clone)
 
-        const options = {
+        // Wait one frame for layout to settle, then measure real height
+        await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+        const contentHeight = clone.scrollHeight
+
+        // If content fits on one page use exact height, otherwise use A4 with smart page breaks
+        const A4_HEIGHT = 842
+        const fitsOnOnePage = contentHeight <= A4_HEIGHT + 20 // 20px buffer
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const options: any = {
           margin: 0,
           filename: defaultFileName,
           image: { type: 'jpeg' as const, quality: 0.98 },
@@ -97,22 +105,25 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
           },
           jsPDF: {
             unit: 'px',
-            format: [595, 842],
+            format: [595, fitsOnOnePage ? contentHeight : A4_HEIGHT],
             orientation: 'portrait',
             hotfixes: ['px_scaling'],
           },
+        }
+
+        // For multi-page: avoid cutting sections in the middle
+        if (!fitsOnOnePage) {
+          options.pagebreak = { mode: ['avoid-all'] }
         }
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (html2pdf() as any).set(options).from(clone).save()
         document.body.removeChild(clone)
       } else {
-        // Fallback: window.print() with print styles
         fallbackPrint(defaultFileName)
       }
     } catch (err) {
       console.error('PDF generation error:', err)
-      // Fallback to print dialog
       fallbackPrint(defaultFileName)
     } finally {
       setIsLoading(false)
