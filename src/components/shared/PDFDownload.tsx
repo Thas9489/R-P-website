@@ -100,14 +100,21 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
         hotfixes: ['px_scaling'],
       })
 
-      if (contentH <= INNER_H) {
-        // ── Single page: content fits with margins, no 2nd page ──────────────
+      // Allow up to 20% overflow before going multi-page.
+      // Content in that band is scaled down to fit — text shrinks ≤ 17%
+      // which is imperceptible for typical resume fonts.
+      const SINGLE_PAGE_LIMIT = Math.round(INNER_H * 1.2)  // ~952px
+
+      if (contentH <= SINGLE_PAGE_LIMIT) {
+        // ── Single page ───────────────────────────────────────────────────────
+        // If content exactly fits use its real height; if slightly over, scale
+        // it down to INNER_H so nothing is clipped and no 2nd page appears.
+        const displayH = contentH <= INNER_H ? contentH : INNER_H
         const img = canvas.toDataURL('image/jpeg', 0.98)
-        doc.addImage(img, 'JPEG', MARGIN, MARGIN, INNER_W, contentH)
+        doc.addImage(img, 'JPEG', MARGIN, MARGIN, INNER_W, displayH)
       } else {
         // ── Multi-page: slice at safe section boundaries ──────────────────────
-        // Find the latest break-point that falls before each page's bottom edge
-        let pageStart = 0      // in content-px
+        let pageStart = 0
         let firstPage = true
 
         while (pageStart < contentH) {
@@ -115,21 +122,31 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
           firstPage = false
 
           const pageBottom = pageStart + INNER_H
+          const remaining = contentH - pageStart
 
-          if (pageBottom >= contentH) {
-            // Last (or only overflow) page — just take the rest
-            const sliceH = contentH - pageStart
-            const sliceCanvas = cropCanvas(canvas, pageStart, sliceH)
+          // All remaining content fits on this page — take it and stop
+          if (remaining <= INNER_H) {
+            const sliceCanvas = cropCanvas(canvas, pageStart, remaining)
             doc.addImage(sliceCanvas.toDataURL('image/jpeg', 0.98),
-              'JPEG', MARGIN, MARGIN, INNER_W, sliceH)
+              'JPEG', MARGIN, MARGIN, INNER_W, remaining)
             break
           }
 
-          // Find the highest break-point that is ≤ pageBottom
-          // (prefer ending just before a new section starts)
+          // Find the latest safe break-point before the page edge
           const safeEnd = breaks
             .filter((b) => b > pageStart && b <= pageBottom)
             .pop() ?? pageBottom
+
+          // If the leftover after this break would be tiny (< 80px), absorb it
+          // onto the current page by scaling slightly rather than creating a
+          // near-blank extra page.
+          const leftover = contentH - safeEnd
+          if (leftover > 0 && leftover < 80) {
+            const sliceCanvas = cropCanvas(canvas, pageStart, remaining)
+            doc.addImage(sliceCanvas.toDataURL('image/jpeg', 0.98),
+              'JPEG', MARGIN, MARGIN, INNER_W, INNER_H)
+            break
+          }
 
           const sliceH = safeEnd - pageStart
           const sliceCanvas = cropCanvas(canvas, pageStart, sliceH)
