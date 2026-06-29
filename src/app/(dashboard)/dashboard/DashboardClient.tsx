@@ -208,7 +208,6 @@ export default function DashboardClient({
   const recentResumes = resumes.slice(0, 3);
   const showChecklist = resumeCount < 2;
   const hasResume = resumeCount > 0;
-  const hasPhoto = !!userImage;
   const hasPortfolio = !!portfolioSlug;
   const hasJobs = savedJobCount > 0;
 
@@ -435,7 +434,7 @@ export default function DashboardClient({
                   className="h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-700"
                   style={{
                     width: `${
-                      ([hasResume, hasPhoto, hasPortfolio, hasJobs].filter(Boolean).length / 4) *
+                      ([hasResume, hasPortfolio, hasJobs].filter(Boolean).length / 3) *
                       100
                     }%`,
                   }}
@@ -444,7 +443,6 @@ export default function DashboardClient({
 
               <div className="divide-y divide-gray-50 dark:divide-gray-800">
                 <ChecklistItem label="Create your first resume" done={hasResume} />
-                <ChecklistItem label="Upload a profile photo" done={hasPhoto} />
                 <ChecklistItem label="Generate your portfolio" done={hasPortfolio} />
                 <ChecklistItem label="Save a job to track" done={hasJobs} />
               </div>
