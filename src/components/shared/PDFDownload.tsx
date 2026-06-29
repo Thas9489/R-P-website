@@ -9,11 +9,16 @@ interface PDFDownloadProps {
   fileName?: string
 }
 
-const PAGE_W = 595        // A4 width px
-const PAGE_H = 842        // A4 height px
-const MARGIN = 24         // margin on every side (px)
-const INNER_W = PAGE_W - MARGIN * 2   // 547
-const INNER_H = PAGE_H - MARGIN * 2   // 794
+// A4 page dimensions (px at 72dpi — matches jsPDF px unit)
+const PAGE_W = 595
+const PAGE_H = 842
+const MARGIN = 20                        // margin on every side
+const INNER_W = PAGE_W - MARGIN * 2     // 555  — usable width
+const INNER_H = PAGE_H - MARGIN * 2     // 802  — usable height per page
+// Render at full 595px so layout matches the preview exactly.
+// jsPDF will scale the image to INNER_W, shrinking by INNER_W/595 ≈ 93%.
+const RENDER_W = PAGE_W                  // 595
+const SCALE = INNER_W / RENDER_W        // ~0.932 (content→PDF space)
 
 function DownloadIcon() {
   return (
@@ -56,43 +61,49 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
       const element = document.getElementById('resume-preview-root')
       if (!element) throw new Error('Resume element not found.')
 
-      // Clone at true 1:1, render width = INNER_W so margins appear naturally
+      // ── 1. Clone at RENDER_W = 595px — same width as the live preview ────────
       const clone = element.cloneNode(true) as HTMLElement
       clone.style.transform = 'none'
       clone.style.position = 'fixed'
       clone.style.top = '0'
       clone.style.left = '-9999px'
-      clone.style.width = `${INNER_W}px`
+      clone.style.width = `${RENDER_W}px`
       clone.style.minHeight = 'unset'
       clone.style.overflow = 'visible'
       clone.style.zIndex = '-1'
       document.body.appendChild(clone)
 
-      // Two rAF so layout fully settles before measuring
+      // Two rAFs so the browser finishes laying out the clone
       await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
 
-      // Collect top positions of every block-level child (section boundaries)
+      // ── 2. Collect element top positions (safe break candidates) ──────────────
+      // Work in RENDER_W (595px) space throughout; convert to PDF space only
+      // when calling addImage.
       const cloneTop = clone.getBoundingClientRect().top
-      const breakCandidates = new Set<number>([0])
+      const breakSet = new Set<number>([0])
       clone.querySelectorAll('div, p, ul, li, section').forEach((el) => {
         const top = Math.round(el.getBoundingClientRect().top - cloneTop)
-        if (top > 0) breakCandidates.add(top)
+        if (top > 0) breakSet.add(top)
       })
-      const breaks = Array.from(breakCandidates).sort((a, b) => a - b)
+      const breaks = Array.from(breakSet).sort((a, b) => a - b)
 
-      // Render the full clone as one tall canvas (2× for retina sharpness)
+      // ── 3. Render full clone to a 2× canvas ──────────────────────────────────
       const canvas = await html2canvas(clone, {
         scale: 2,
         useCORS: true,
         logging: false,
-        width: INNER_W,
-        windowWidth: INNER_W,
+        width: RENDER_W,
+        windowWidth: RENDER_W,
       })
-
       document.body.removeChild(clone)
 
-      const contentH = canvas.height / 2   // actual px height of content
+      // Content height in RENDER_W space (÷2 because canvas is 2×)
+      const contentH = canvas.height / 2
 
+      // How much RENDER_W content fits on one PDF page (inverse of SCALE)
+      const pageCapacity = INNER_H / SCALE   // ~860px in 595px space
+
+      // ── 4. Build PDF ──────────────────────────────────────────────────────────
       const doc = new jsPDF({
         unit: 'px',
         format: [PAGE_W, PAGE_H],
@@ -100,58 +111,57 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
         hotfixes: ['px_scaling'],
       })
 
-      // Allow up to 20% overflow before going multi-page.
-      // Content in that band is scaled down to fit — text shrinks ≤ 17%
-      // which is imperceptible for typical resume fonts.
-      const SINGLE_PAGE_LIMIT = Math.round(INNER_H * 1.2)  // ~952px
+      // Single-page when content (after SCALE) fits within INNER_H.
+      // Allow up to 20% overflow — jsPDF scales the image down to fit,
+      // text shrinks by ≤17% which is invisible at normal print sizes.
+      const singlePageLimit = pageCapacity * 1.2   // in 595px space
 
-      if (contentH <= SINGLE_PAGE_LIMIT) {
+      if (contentH <= singlePageLimit) {
         // ── Single page ───────────────────────────────────────────────────────
-        // If content exactly fits use its real height; if slightly over, scale
-        // it down to INNER_H so nothing is clipped and no 2nd page appears.
-        const displayH = contentH <= INNER_H ? contentH : INNER_H
+        const pdfH = Math.min(contentH * SCALE, INNER_H)
         const img = canvas.toDataURL('image/jpeg', 0.98)
-        doc.addImage(img, 'JPEG', MARGIN, MARGIN, INNER_W, displayH)
+        doc.addImage(img, 'JPEG', MARGIN, MARGIN, INNER_W, pdfH)
       } else {
         // ── Multi-page: slice at safe section boundaries ──────────────────────
-        let pageStart = 0
+        let pageStart = 0   // in 595px (RENDER_W) space
         let firstPage = true
 
         while (pageStart < contentH) {
           if (!firstPage) doc.addPage()
           firstPage = false
 
-          const pageBottom = pageStart + INNER_H
-          const remaining = contentH - pageStart
+          const remaining = contentH - pageStart        // 595px space
+          const remainingPdf = remaining * SCALE        // PDF space
 
-          // All remaining content fits on this page — take it and stop
-          if (remaining <= INNER_H) {
-            const sliceCanvas = cropCanvas(canvas, pageStart, remaining)
-            doc.addImage(sliceCanvas.toDataURL('image/jpeg', 0.98),
-              'JPEG', MARGIN, MARGIN, INNER_W, remaining)
+          // All remaining fits on this page
+          if (remainingPdf <= INNER_H) {
+            const slice = cropCanvas(canvas, pageStart, remaining)
+            doc.addImage(slice.toDataURL('image/jpeg', 0.98),
+              'JPEG', MARGIN, MARGIN, INNER_W, remainingPdf)
             break
           }
 
-          // Find the latest safe break-point before the page edge
+          // Page boundary in 595px space
+          const pageBottom = pageStart + pageCapacity
+
+          // Latest element boundary that falls before the page edge
           const safeEnd = breaks
             .filter((b) => b > pageStart && b <= pageBottom)
             .pop() ?? pageBottom
 
-          // If the leftover after this break would be tiny (< 80px), absorb it
-          // onto the current page by scaling slightly rather than creating a
-          // near-blank extra page.
-          const leftover = contentH - safeEnd
-          if (leftover > 0 && leftover < 80) {
-            const sliceCanvas = cropCanvas(canvas, pageStart, remaining)
-            doc.addImage(sliceCanvas.toDataURL('image/jpeg', 0.98),
+          // If what's left after the break is tiny, absorb it onto this page
+          const leftoverPdf = (contentH - safeEnd) * SCALE
+          if (leftoverPdf > 0 && leftoverPdf < 80) {
+            const slice = cropCanvas(canvas, pageStart, remaining)
+            doc.addImage(slice.toDataURL('image/jpeg', 0.98),
               'JPEG', MARGIN, MARGIN, INNER_W, INNER_H)
             break
           }
 
-          const sliceH = safeEnd - pageStart
-          const sliceCanvas = cropCanvas(canvas, pageStart, sliceH)
-          doc.addImage(sliceCanvas.toDataURL('image/jpeg', 0.98),
-            'JPEG', MARGIN, MARGIN, INNER_W, sliceH)
+          const sliceH = safeEnd - pageStart           // 595px space
+          const slice = cropCanvas(canvas, pageStart, sliceH)
+          doc.addImage(slice.toDataURL('image/jpeg', 0.98),
+            'JPEG', MARGIN, MARGIN, INNER_W, sliceH * SCALE)
 
           pageStart = safeEnd
         }
@@ -166,15 +176,11 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
     }
   }
 
-  /** Crop a 2× canvas slice: y and h are in 1× (CSS) px */
-  function cropCanvas(
-    src: HTMLCanvasElement,
-    y: number,
-    h: number,
-  ): HTMLCanvasElement {
+  /** Crop a 2× canvas: y and h are in 1× (CSS / RENDER_W) pixels */
+  function cropCanvas(src: HTMLCanvasElement, y: number, h: number): HTMLCanvasElement {
     const out = document.createElement('canvas')
     out.width = src.width
-    out.height = Math.round(h * 2)
+    out.height = Math.max(1, Math.round(h * 2))
     const ctx = out.getContext('2d')!
     ctx.drawImage(src, 0, Math.round(y * 2), src.width, out.height, 0, 0, src.width, out.height)
     return out
@@ -194,16 +200,11 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
           padding: ${MARGIN}px;
           box-sizing: border-box;
         }
-        #resume-preview-root {
-          transform: none !important;
-          width: 100% !important;
-          box-shadow: none !important;
-        }
+        #resume-preview-root { transform: none !important; width: 100% !important; box-shadow: none !important; }
         @page { size: A4; margin: 0; }
       }
     `
     document.head.appendChild(style)
-
     const resumeEl = document.getElementById('resume-preview-root')
     let wrapper: HTMLDivElement | null = null
     if (resumeEl) {
@@ -215,11 +216,9 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
       wrapper.appendChild(cloned)
       document.body.appendChild(wrapper)
     }
-
     const originalTitle = document.title
     document.title = name
     window.print()
-
     setTimeout(() => {
       document.title = originalTitle
       document.getElementById('__resume-print-style')?.remove()
@@ -233,16 +232,11 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
         onClick={handleDownload}
         disabled={isLoading}
         style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
+          display: 'inline-flex', alignItems: 'center', gap: 8,
           padding: '10px 20px',
           background: isLoading ? '#6b7280' : '#3b82f6',
-          color: '#fff',
-          border: 'none',
-          borderRadius: 8,
-          fontSize: 14,
-          fontWeight: 600,
+          color: '#fff', border: 'none', borderRadius: 8,
+          fontSize: 14, fontWeight: 600,
           cursor: isLoading ? 'not-allowed' : 'pointer',
           fontFamily: 'system-ui, -apple-system, sans-serif',
           transition: 'background 0.15s ease, opacity 0.15s ease',
@@ -256,7 +250,6 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
         {isLoading ? <LoadingSpinner /> : <DownloadIcon />}
         <span>{isLoading ? 'Generating PDF…' : 'Download PDF'}</span>
       </button>
-
       {error && (
         <p style={{ marginTop: 6, fontSize: 12, color: '#ef4444', fontFamily: 'system-ui, sans-serif' }}>
           {error}
