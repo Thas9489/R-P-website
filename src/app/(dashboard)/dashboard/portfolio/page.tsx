@@ -309,12 +309,13 @@ export default function PortfolioPage() {
   const [selectedTheme, setSelectedTheme] = useState<PortfolioTheme>('modern')
   const [generating, setGenerating] = useState(false)
   const [showShare, setShowShare] = useState(false)
-  // Resolved client-side so the URL always reflects the actual origin
-  const [appUrl, setAppUrl] = useState('')
+  // Initialize immediately from the env var (inlined at build time); fall back
+  // to window.location.origin on the client if the var isn't set.
+  const [appUrl, setAppUrl] = useState(process.env.NEXT_PUBLIC_APP_URL || '')
 
   useEffect(() => {
-    setAppUrl(process.env.NEXT_PUBLIC_APP_URL || window.location.origin)
-  }, [])
+    if (!appUrl) setAppUrl(window.location.origin)
+  }, [appUrl])
 
   const fetchData = useCallback(async () => {
     try {
@@ -347,7 +348,10 @@ export default function PortfolioPage() {
     finally { setGenerating(false) }
   }
 
+  // Full absolute URL (for copy/share) — available once appUrl is resolved
   const publicUrl = portfolio && appUrl ? `${appUrl}/portfolio/${portfolio.slug}` : ''
+  // Relative path — always safe to use as an href (browser resolves against current origin)
+  const portfolioPath = portfolio ? `/portfolio/${portfolio.slug}` : ''
   const resumeData = (portfolio?.resume?.data as ResumeData | undefined) ?? null
 
   if (loadState === 'loading') {
@@ -432,16 +436,16 @@ export default function PortfolioPage() {
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Public URL</p>
                 <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 flex-wrap">
                   <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate font-mono">
-                    {publicUrl || `…/portfolio/${portfolio.slug}`}
+                    {publicUrl || portfolioPath}
                   </span>
                   <div className="flex gap-2">
+                    {/* Copy needs the full absolute URL */}
                     {publicUrl && <CopyButton text={publicUrl} />}
-                    {publicUrl && (
-                      <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors">
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                        Open
-                      </a>
-                    )}
+                    {/* Open always works — relative path resolves against current origin */}
+                    <a href={portfolioPath} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors">
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                      Open
+                    </a>
                     {publicUrl && (
                       <button onClick={() => setShowShare(true)} className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
