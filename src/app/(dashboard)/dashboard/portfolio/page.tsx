@@ -309,13 +309,13 @@ export default function PortfolioPage() {
   const [selectedTheme, setSelectedTheme] = useState<PortfolioTheme>('modern')
   const [generating, setGenerating] = useState(false)
   const [showShare, setShowShare] = useState(false)
-  // Initialize immediately from the env var (inlined at build time); fall back
-  // to window.location.origin on the client if the var isn't set.
-  const [appUrl, setAppUrl] = useState(process.env.NEXT_PUBLIC_APP_URL || '')
+  // Always use window.location.origin so the share link reflects the actual
+  // domain the app is deployed on (works in both dev and production).
+  const [appUrl, setAppUrl] = useState('')
 
   useEffect(() => {
-    if (!appUrl) setAppUrl(window.location.origin)
-  }, [appUrl])
+    setAppUrl(window.location.origin)
+  }, [])
 
   const fetchData = useCallback(async () => {
     try {
