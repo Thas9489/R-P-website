@@ -277,7 +277,7 @@ export default function PortfolioPage() {
                 </div>
                 <div className="h-[400px]">
                   {portfolio.isPublic ? (
-                    <iframe src={publicUrl} className="w-full h-full border-none" title="Portfolio preview" sandbox="allow-scripts allow-same-origin" />
+                    <iframe key={portfolio.updatedAt} src={publicUrl} className="w-full h-full border-none" title="Portfolio preview" sandbox="allow-scripts allow-same-origin" />
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full text-gray-400">
                       <svg className="w-10 h-10 mb-3 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>

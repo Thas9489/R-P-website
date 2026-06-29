@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest) {
     const finalSlug = slugTaken ? `${base}-${Math.random().toString(36).slice(2, 6)}` : base
 
     const portfolio = await db.portfolio.upsert(session.user.id, resumeId, theme, finalSlug)
+    revalidatePath(`/portfolio/${finalSlug}`)
     return NextResponse.json({ portfolio }, { status: 201 })
   } catch (err) {
     console.error('[PORTFOLIO_POST]', err)
@@ -55,6 +57,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const portfolio = await db.portfolio.update(session.user.id, { theme, isPublic, slug })
+    revalidatePath(`/portfolio/${portfolio.slug}`)
     return NextResponse.json({ portfolio })
   } catch (err) {
     console.error('[PORTFOLIO_PUT]', err)
