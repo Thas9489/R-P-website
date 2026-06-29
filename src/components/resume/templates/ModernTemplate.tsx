@@ -140,11 +140,20 @@ export function ModernTemplate({ resumeData }: Props) {
         )}
 
         {/* Name + Title */}
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>
+        <div style={{ textAlign: 'center', width: '100%' }}>
+          <div
+            style={{
+              fontSize: 16,
+              fontWeight: 700,
+              color: '#fff',
+              lineHeight: 1.3,
+              wordBreak: 'break-word',
+              overflowWrap: 'break-word',
+            }}
+          >
             {personalInfo.name}
           </div>
-          <div style={{ fontSize: 11, color: '#4f86f7', marginTop: 4, fontWeight: 500 }}>
+          <div style={{ fontSize: 10.5, color: '#4f86f7', marginTop: 5, fontWeight: 500, wordBreak: 'break-word' }}>
             {personalInfo.title}
           </div>
         </div>
