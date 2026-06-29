@@ -11,7 +11,6 @@ import {
   Globe,
   Search,
   Bookmark,
-  Settings,
   Sparkles,
   LogOut,
   BrainCircuit,
@@ -35,7 +34,6 @@ const navItems: NavItem[] = [
   { label: 'Portfolio', href: '/dashboard/portfolio', icon: Globe },
   { label: 'Job Search', href: '/dashboard/jobs', icon: Search },
   { label: 'Saved Jobs', href: '/dashboard/saved-jobs', icon: Bookmark },
-  { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 
 // Mock credits — replace with real value from session/API as needed
