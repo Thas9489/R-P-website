@@ -3,8 +3,6 @@ import { createServerClient } from '@supabase/ssr'
 import { db } from '@/lib/db'
 import { analyzeATS } from '@/lib/ai'
 
-export const runtime = 'edge'
-
 async function getUserFromReq(req: NextRequest) {
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

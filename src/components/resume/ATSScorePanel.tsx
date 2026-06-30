@@ -92,8 +92,15 @@ export function ATSScorePanel({ resumeData }: ATSScorePanelProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ resumeData, jobDescription }),
       })
-      const json = await res.json()
+      const text = await res.text()
+      let json: { analysis?: typeof result; error?: string }
+      try {
+        json = JSON.parse(text)
+      } catch {
+        throw new Error('Server error — please try again')
+      }
       if (!res.ok) throw new Error(json.error || 'Analysis failed')
+      if (!json.analysis) throw new Error('Invalid response from server')
       setResult(json.analysis)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
