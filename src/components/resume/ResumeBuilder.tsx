@@ -40,6 +40,7 @@ import CertificationsStep from './steps/CertificationsStep'
 import AwardsStep from './steps/AwardsStep'
 import ReferencesStep from './steps/ReferencesStep'
 import { ResumePreview } from '@/components/resume/ResumePreview'
+import { ATSScorePanel } from '@/components/resume/ATSScorePanel'
 
 interface ResumeBuilderProps {
   resumeId: string
@@ -203,6 +204,9 @@ export default function ResumeBuilder({ resumeId }: ResumeBuilderProps) {
                 <span className="text-amber-500">Unsaved changes</span>
               )}
             </div>
+
+            {/* ATS Score */}
+            <ATSScorePanel resumeData={resumeData} />
 
             {/* Template selector */}
             <Select
