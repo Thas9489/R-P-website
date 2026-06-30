@@ -9,7 +9,7 @@ const FALLBACK_MODELS = [
   'qwen/qwen-2.5-7b-instruct:free',
 ]
 
-async function callOpenRouter(model: string, prompt: string, maxTokens: number): Promise<string> {
+async function callOpenRouter(model: string, prompt: string, maxTokens: number, temperature = 0.7): Promise<string> {
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -27,6 +27,7 @@ async function callOpenRouter(model: string, prompt: string, maxTokens: number):
         { role: 'user', content: prompt },
       ],
       max_tokens: maxTokens,
+      temperature,
     }),
   })
 
@@ -42,7 +43,7 @@ async function callOpenRouter(model: string, prompt: string, maxTokens: number):
   return content
 }
 
-async function generateText(prompt: string, maxTokens = 1024): Promise<string> {
+async function generateText(prompt: string, maxTokens = 1024, temperature = 0.7): Promise<string> {
   const provider = process.env.AI_PROVIDER || 'openai'
 
   if (provider === 'openrouter') {
@@ -51,7 +52,7 @@ async function generateText(prompt: string, maxTokens = 1024): Promise<string> {
 
     for (const model of models) {
       try {
-        return await callOpenRouter(model, prompt, maxTokens)
+        return await callOpenRouter(model, prompt, maxTokens, temperature)
       } catch (err) {
         const status = (err as { status?: number }).status
         const isEmpty = err instanceof Error && err.message === 'Empty response from model'
@@ -95,7 +96,7 @@ async function generateText(prompt: string, maxTokens = 1024): Promise<string> {
         { role: 'user', content: prompt },
       ],
       max_tokens: maxTokens,
-      temperature: 0.7,
+      temperature,
     }),
   })
   const data = await res.json()
@@ -242,7 +243,7 @@ Return a JSON object with:
   "suggestions": [<3-5 actionable improvement tips>]
 }`
 
-  const result = await generateText(prompt, 600)
+  const result = await generateText(prompt, 600, 0)
   try {
     const match = result.match(/\{[\s\S]*\}/)
     if (match) return JSON.parse(match[0])
