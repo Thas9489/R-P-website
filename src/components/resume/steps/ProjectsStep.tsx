@@ -36,8 +36,9 @@ export default function ProjectsStep() {
   const [form, setForm] = useState<FormState>(defaultForm)
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({})
   const [techInput, setTechInput] = useState('')
-  const [aiState, setAiState] = useState<'idle' | 'loading' | 'result'>('idle')
+  const [aiState, setAiState] = useState<'idle' | 'loading' | 'result' | 'error'>('idle')
   const [aiResult, setAiResult] = useState('')
+  const [aiError, setAiError] = useState('')
 
   const openAdd = () => {
     setEditId(null)
@@ -104,6 +105,7 @@ export default function ProjectsStep() {
 
   const handleAiGenerate = async () => {
     setAiState('loading')
+    setAiError('')
     try {
       const res = await fetch('/api/ai/generate', {
         method: 'POST',
@@ -114,12 +116,16 @@ export default function ProjectsStep() {
           resumeData: { projects: resumeData.projects },
         }),
       })
-      if (!res.ok) throw new Error('Failed')
-      const data = await res.json()
+      const text = await res.text()
+      let data: { result?: string; error?: string }
+      try { data = JSON.parse(text) } catch { throw new Error('Server error — please try again') }
+      if (!res.ok) throw new Error(data.error || 'Generation failed')
+      if (!data.result) throw new Error('No result returned')
       setAiResult(data.result)
       setAiState('result')
-    } catch {
-      setAiState('idle')
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'Something went wrong')
+      setAiState('error')
     }
   }
 
@@ -229,7 +235,7 @@ export default function ProjectsStep() {
                   className="h-6 text-xs gap-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
                 >
                   {aiState === 'loading' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                  Generate with AI
+                  {aiState === 'loading' ? 'Generating...' : 'Generate with AI'}
                 </Button>
               </div>
               <Textarea
@@ -241,6 +247,14 @@ export default function ProjectsStep() {
               />
               {errors.description && <p className="text-xs text-red-500">{errors.description}</p>}
             </div>
+
+            {/* AI error */}
+            {aiState === 'error' && (
+              <p className="text-xs text-red-500 flex items-center gap-1">
+                {aiError}
+                <button type="button" onClick={handleAiGenerate} className="underline ml-1">Retry</button>
+              </p>
+            )}
 
             {/* AI result */}
             {aiState === 'result' && (
