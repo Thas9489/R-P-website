@@ -151,7 +151,7 @@ export default function RegisterPage() {
   return (
     <div className="flex min-h-[680px]">
       {/* ── Left panel ── */}
-      <div className="hidden lg:flex lg:w-[38%] flex-col justify-between p-12 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-[38%] flex-col justify-between gap-10 p-12 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 relative overflow-hidden">
         <div className="absolute -top-20 -left-20 w-80 h-80 rounded-full bg-white/10 blur-3xl pointer-events-none" />
         <div className="absolute -bottom-20 -right-16 w-80 h-80 rounded-full bg-white/10 blur-3xl pointer-events-none" />
 

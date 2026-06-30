@@ -102,7 +102,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-[600px]">
       {/* ── Left panel ── */}
-      <div className="hidden lg:flex lg:w-[42%] flex-col justify-between p-12 bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-700 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-[42%] flex-col justify-between gap-10 p-12 bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-700 relative overflow-hidden">
         <div className="absolute -top-24 -left-24 w-80 h-80 rounded-full bg-white/10 blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -right-16 w-96 h-96 rounded-full bg-white/10 blur-3xl pointer-events-none" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-violet-400/10 blur-2xl pointer-events-none" />
