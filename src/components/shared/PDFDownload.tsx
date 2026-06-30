@@ -9,14 +9,37 @@ interface PDFDownloadProps {
   fileName?: string
 }
 
-const PAGE_W = 595
-const PAGE_H = 842
-const MARGIN = 20
+// ── PDF geometry (jsPDF "px" unit at 72 DPI → A4) ──────────────────────────
+const PAGE_W  = 595
+const PAGE_H  = 842
+const MARGIN  = 20
 const INNER_W = PAGE_W - MARGIN * 2   // 555
 const INNER_H = PAGE_H - MARGIN * 2   // 802
-const RENDER_W = PAGE_W               // render at full 595 to match preview
-const SCALE = INNER_W / RENDER_W      // ~0.932
 
+// The clone always renders at exactly this CSS width (matches live preview).
+const RENDER_W = PAGE_W  // 595
+
+// Horizontal CSS-px → PDF-px ratio.
+const SCALE = INNER_W / RENDER_W  // 555/595 ≈ 0.9328
+
+// ── Page-capacity constants (integers, no float surprises) ───────────────────
+// floor(INNER_H / SCALE) = floor(802 / 0.9328) = 859.  A slice of exactly
+// PAGE_CAPACITY CSS-px maps to 859 × 0.9328 = 801.1 PDF-px ≤ INNER_H ✓
+const PAGE_CAPACITY = 859
+
+// Content ≤ this CSS height → single page (≤ 23 % compression at worst).
+const SINGLE_PAGE_LIMIT = 1117  // ≈ PAGE_CAPACITY × 1.3
+
+// When the LAST page of a multi-page layout would be less than this fraction
+// full, collapse everything to a single compressed page (avoids "mostly-blank
+// second page" for resumes that are only slightly over one page long).
+const SPARE_PAGE_THRESHOLD = 0.40   // 40 % of INNER_H
+
+// Don't force single-page for content longer than this — the compression would
+// make text unreadably small (~60 % of original size at this limit).
+const FORCE_SINGLE_MAX_H = 1350
+
+// ── Icon components ──────────────────────────────────────────────────────────
 function DownloadIcon() {
   return (
     <svg width={16} height={16} viewBox="0 0 24 24" fill="none"
@@ -38,28 +61,91 @@ function LoadingSpinner() {
   )
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
 /**
- * Collect page-break candidates from elements explicitly marked by templates.
- *
- * Templates add data-pdf-break="before" to any element whose TOP is a safe
- * cut point (i.e. we may start a new page there).  This avoids all DOM
- * geometry guessing and gives each template full control over where breaks
- * are allowed — critical for multi-column layouts where a geometric cut
- * would slice through the other column's content mid-entry.
+ * Collect page-break candidates from elements that templates mark with
+ * data-pdf-break.  Returns sorted CSS-px offsets from the clone top.
+ * Templates control exactly where breaks are allowed — critical for multi-column
+ * layouts where a geometric cut would slice across both columns simultaneously.
  */
 function collectSafeBreaks(root: HTMLElement, cloneTop: number): number[] {
   const set = new Set<number>([0])
-  const markers = root.querySelectorAll('[data-pdf-break]')
-  markers.forEach((el) => {
+  root.querySelectorAll('[data-pdf-break]').forEach((el) => {
     const top = Math.round((el as HTMLElement).getBoundingClientRect().top - cloneTop)
     if (top > 10) set.add(top)
   })
   return Array.from(set).sort((a, b) => a - b)
 }
 
+/** Crop a 2× canvas.  y and h are in 1× (CSS / RENDER_W) pixels. */
+function cropCanvas(src: HTMLCanvasElement, y: number, h: number): HTMLCanvasElement {
+  const out = document.createElement('canvas')
+  out.width  = src.width
+  out.height = Math.max(1, Math.round(h * 2))
+  const ctx = out.getContext('2d')!
+  ctx.drawImage(src, 0, Math.round(y * 2), src.width, out.height, 0, 0, src.width, out.height)
+  return out
+}
+
+/** Wait for all <img> in root to finish loading (profile photo, icons). */
+async function waitForImages(root: HTMLElement): Promise<void> {
+  const imgs = Array.from(root.querySelectorAll('img'))
+  if (!imgs.length) return
+  await Promise.race([
+    Promise.all(
+      imgs.map(
+        (img) =>
+          new Promise<void>((resolve) => {
+            if (img.complete && img.naturalWidth > 0) { resolve(); return }
+            img.addEventListener('load',  () => resolve(), { once: true })
+            img.addEventListener('error', () => resolve(), { once: true })
+          }),
+      ),
+    ),
+    // Never stall the export for a single broken image
+    new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+  ])
+}
+
+/**
+ * Simulate the multi-page layout and return an array of {start, end} slices
+ * in CSS-px coordinates.  Uses the same break-selection logic as the real
+ * render so we can inspect the result (e.g. last-page fullness) before
+ * committing to any PDF operations.
+ */
+function simulatePages(
+  contentH: number,
+  breaks: number[],
+): Array<{ start: number; end: number }> {
+  const pages: Array<{ start: number; end: number }> = []
+  let cursor = 0
+
+  while (cursor < contentH) {
+    const remaining    = contentH - cursor
+    const remainingPdf = remaining * SCALE
+
+    if (remainingPdf <= INNER_H) {
+      pages.push({ start: cursor, end: contentH })
+      break
+    }
+
+    const pageBottom = cursor + PAGE_CAPACITY
+    const safeEnd    =
+      breaks.filter((b) => b > cursor && b <= pageBottom).pop() ?? pageBottom
+
+    pages.push({ start: cursor, end: safeEnd })
+    cursor = safeEnd
+  }
+
+  return pages
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
+
 export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError]         = useState<string | null>(null)
 
   const defaultFileName =
     fileName || `${resumeData.personalInfo.name.replace(/\s+/g, '_')}_Resume.pdf`
@@ -77,100 +163,101 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
       const element = document.getElementById('resume-preview-root')
       if (!element) throw new Error('Resume element not found.')
 
-      // ── Clone at RENDER_W = 595px (same as live preview) ─────────────────
+      // ── Clone at RENDER_W = 595 px (matching the live preview element) ──────
       const clone = element.cloneNode(true) as HTMLElement
-      clone.style.transform = 'none'
-      clone.style.position = 'fixed'
-      clone.style.top = '0'
-      clone.style.left = '-9999px'
-      clone.style.width = `${RENDER_W}px`
-      clone.style.minHeight = 'unset'
-      clone.style.overflow = 'visible'
-      clone.style.zIndex = '-1'
+      clone.style.transform  = 'none'
+      clone.style.position   = 'fixed'
+      clone.style.top        = '0'
+      clone.style.left       = '-9999px'
+      clone.style.width      = `${RENDER_W}px`
+      clone.style.minHeight  = 'unset'
+      clone.style.overflow   = 'visible'
+      clone.style.zIndex     = '-1'
       document.body.appendChild(clone)
 
+      // Two animation frames → clone has fully laid out in the DOM.
+      // Then wait for profile image / icon assets to load.
       await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+      await waitForImages(clone)
 
-      // ── Collect break candidates (flex-row-aware) ─────────────────────────
+      // ── Collect safe break positions ────────────────────────────────────────
       const cloneTop = clone.getBoundingClientRect().top
-      const breaks = collectSafeBreaks(clone, cloneTop)
+      const breaks   = collectSafeBreaks(clone, cloneTop)
 
-      // ── Render full clone to 2× canvas ───────────────────────────────────
+      // ── Capture at 2× for crisp output ─────────────────────────────────────
       const canvas = await html2canvas(clone, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        width: RENDER_W,
+        scale:       2,
+        useCORS:     true,
+        allowTaint:  true,
+        logging:     false,
+        width:       RENDER_W,
         windowWidth: RENDER_W,
       })
       document.body.removeChild(clone)
 
-      // Content height in RENDER_W (595px) space
-      const contentH = canvas.height / 2
-      // How much 595px content fits on one PDF page (accounting for margins+scale)
-      const pageCapacity = INNER_H / SCALE   // ~860px
+      // Round to integer to eliminate float drift
+      const contentH = Math.round(canvas.height / 2)
 
-      // ── Build PDF ─────────────────────────────────────────────────────────
+      // ── Build PDF ───────────────────────────────────────────────────────────
       const doc = new jsPDF({
-        unit: 'px',
-        format: [PAGE_W, PAGE_H],
+        unit:        'px',
+        format:      [PAGE_W, PAGE_H],
         orientation: 'portrait',
-        hotfixes: ['px_scaling'],
+        hotfixes:    ['px_scaling'],
       })
 
-      // Single-page limit: 1.3× page capacity.
-      // Content in that band is scaled down to fit — at most ~23% smaller,
-      // imperceptible at normal print sizes.  Prevents a near-blank 2nd page.
-      const SINGLE_PAGE_LIMIT = pageCapacity * 1.3
+      const fullImg = canvas.toDataURL('image/jpeg', 0.98)
 
+      // ── Path 1 — single page ────────────────────────────────────────────────
+      // Content up to SINGLE_PAGE_LIMIT fits naturally on one A4 page with at
+      // most ~23 % compression, which is imperceptible at normal print sizes.
       if (contentH <= SINGLE_PAGE_LIMIT) {
-        // ── Single page ───────────────────────────────────────────────────
-        const pdfH = Math.min(contentH * SCALE, INNER_H)
-        const img = canvas.toDataURL('image/jpeg', 0.98)
-        doc.addImage(img, 'JPEG', MARGIN, MARGIN, INNER_W, pdfH)
-      } else {
-        // ── Multi-page: slice only at flex-row-aware safe breaks ──────────
-        let pageStart = 0   // in 595px space
-        let firstPage = true
+        const pdfH = Math.min(Math.round(contentH * SCALE), INNER_H)
+        doc.addImage(fullImg, 'JPEG', MARGIN, MARGIN, INNER_W, pdfH)
+        doc.save(defaultFileName)
+        return
+      }
 
-        while (pageStart < contentH) {
-          if (!firstPage) doc.addPage()
-          firstPage = false
+      // ── Path 2 — simulate multi-page; decide whether to collapse ────────────
+      const pages = simulatePages(contentH, breaks)
 
-          const remaining = contentH - pageStart
-          const remainingPdf = remaining * SCALE
+      const lastPage      = pages[pages.length - 1]
+      const lastPageH     = lastPage.end - lastPage.start
+      const lastPageRatio = (lastPageH * SCALE) / INNER_H
 
-          // Everything left fits on this page
-          if (remainingPdf <= INNER_H) {
-            const slice = cropCanvas(canvas, pageStart, remaining)
-            doc.addImage(slice.toDataURL('image/jpeg', 0.98),
-              'JPEG', MARGIN, MARGIN, INNER_W, remainingPdf)
-            break
-          }
+      // If the last page would be sparsely filled AND the resume isn't so long
+      // that single-page compression would make text tiny, collapse to one page.
+      const shouldForceSingle =
+        contentH <= FORCE_SINGLE_MAX_H && lastPageRatio < SPARE_PAGE_THRESHOLD
 
-          const pageBottom = pageStart + pageCapacity
+      if (shouldForceSingle) {
+        doc.addImage(fullImg, 'JPEG', MARGIN, MARGIN, INNER_W, INNER_H)
+        doc.save(defaultFileName)
+        return
+      }
 
-          // Latest SAFE break before the page edge
-          const safeEnd = breaks
-            .filter((b) => b > pageStart && b <= pageBottom)
-            .pop() ?? pageBottom
+      // ── Path 3 — genuine multi-page render ─────────────────────────────────
+      let firstPage = true
 
-          // If leftover after the break is tiny, absorb it onto this page
-          const leftoverPdf = (contentH - safeEnd) * SCALE
-          if (leftoverPdf > 0 && leftoverPdf < 100) {
-            const slice = cropCanvas(canvas, pageStart, remaining)
-            doc.addImage(slice.toDataURL('image/jpeg', 0.98),
-              'JPEG', MARGIN, MARGIN, INNER_W, INNER_H)
-            break
-          }
+      for (const page of pages) {
+        if (!firstPage) doc.addPage()
+        firstPage = false
 
-          const sliceH = safeEnd - pageStart
-          const slice = cropCanvas(canvas, pageStart, sliceH)
-          doc.addImage(slice.toDataURL('image/jpeg', 0.98),
-            'JPEG', MARGIN, MARGIN, INNER_W, sliceH * SCALE)
+        const sliceH = page.end - page.start
+        if (sliceH <= 0) continue
 
-          pageStart = safeEnd
-        }
+        // Per-page scale preserves aspect ratio (no cross-page squishing)
+        const pdfH  = Math.min(Math.round(sliceH * SCALE), INNER_H)
+        const slice = cropCanvas(canvas, page.start, sliceH)
+
+        doc.addImage(
+          slice.toDataURL('image/jpeg', 0.98),
+          'JPEG',
+          MARGIN,
+          MARGIN,
+          INNER_W,
+          pdfH,
+        )
       }
 
       doc.save(defaultFileName)
@@ -182,19 +269,9 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
     }
   }
 
-  /** Crop a 2× canvas: y and h are in 1× (CSS / RENDER_W) pixels */
-  function cropCanvas(src: HTMLCanvasElement, y: number, h: number): HTMLCanvasElement {
-    const out = document.createElement('canvas')
-    out.width = src.width
-    out.height = Math.max(1, Math.round(h * 2))
-    const ctx = out.getContext('2d')!
-    ctx.drawImage(src, 0, Math.round(y * 2), src.width, out.height, 0, 0, src.width, out.height)
-    return out
-  }
-
   function fallbackPrint(name: string) {
     const style = document.createElement('style')
-    style.id = '__resume-print-style'
+    style.id    = '__resume-print-style'
     style.textContent = `
       @media print {
         body > *:not(#__resume-print-wrapper) { display: none !important; }
@@ -212,7 +289,7 @@ export function PDFDownload({ resumeData, template, fileName }: PDFDownloadProps
     let wrapper: HTMLDivElement | null = null
     if (resumeEl) {
       wrapper = document.createElement('div')
-      wrapper.id = '__resume-print-wrapper'
+      wrapper.id    = '__resume-print-wrapper'
       wrapper.style.display = 'none'
       const cloned = resumeEl.cloneNode(true) as HTMLElement
       cloned.style.transform = 'none'
