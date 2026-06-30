@@ -39,60 +39,72 @@ function LoadingSpinner() {
 }
 
 /**
+ * Detect whether el's children are arranged side-by-side (horizontal layout).
+ * We check geometry rather than CSS because React inline styles on cloned
+ * elements can have unreliable computed values.
+ * Rule: if first and last child share nearly the same top coordinate they
+ * are sitting next to each other (flex-row / multi-column).
+ */
+function isSideBySide(el: HTMLElement): boolean {
+  const kids = Array.from(el.children) as HTMLElement[]
+  if (kids.length < 2) return false
+  const t0 = kids[0].getBoundingClientRect().top
+  const tN = kids[kids.length - 1].getBoundingClientRect().top
+  return Math.abs(tN - t0) < 15          // within 15 px → side-by-side
+}
+
+/**
  * Walk the DOM and collect page-break candidates.
  *
- * Small flex-rows (≤ 50px tall — date rows, contact strips, skill tags):
- *   → Add their bottom as a candidate and stop recursing.
+ * SIDE-BY-SIDE (horizontal) containers — detected by geometry:
+ *   ≤ 50 px tall  → atomic row (date line, contact strip…).
+ *                   Add its bottom as a candidate; stop recursing.
+ *   > 50 px tall  → multi-column section (sidebar body, two-column lower…).
+ *                   Go ONE level into each column and add the TOP of every
+ *                   direct section child.  Never recurse deeper, which
+ *                   prevents cuts inside individual entries.
  *
- * Large flex-rows (> 50px — two-column layouts, sidebar bodies):
- *   → Go ONE level deep into each column child to get section-level tops.
- *     This gives us break candidates inside multi-column templates (Modern,
- *     Creative, Developer) WITHOUT recursing into individual content items
- *     that would produce too-granular cuts.
- *
- * Block / flex-column containers: recurse normally, collecting all children tops.
+ * STACKED (vertical) containers:
+ *   Add each child's top as a candidate, then recurse — but ONLY into
+ *   children taller than 40 px.  This stops the walker from diving into
+ *   small leaf entries (a 2-line reference card, a cert row) and adding
+ *   their sub-element tops as cut points.
  */
 function collectSafeBreaks(root: HTMLElement, cloneTop: number): number[] {
   const set = new Set<number>([0])
 
   function walk(el: HTMLElement) {
-    const cs = window.getComputedStyle(el)
-    const isFlex = cs.display === 'flex' || cs.display === 'inline-flex'
-    const dir = cs.flexDirection || 'row'
-    const isFlexRow = isFlex && (dir === 'row' || dir === 'row-reverse')
+    const rect = el.getBoundingClientRect()
+    const h    = Math.round(rect.bottom - rect.top)
 
-    if (isFlexRow) {
-      const rect = el.getBoundingClientRect()
-      const height = Math.round(rect.bottom - rect.top)
+    if (isSideBySide(el)) {
       const bottom = Math.round(rect.bottom - cloneTop)
 
-      if (height <= 50) {
-        // Small inline row — just add its bottom and stop
+      if (h <= 50) {
+        // Atomic horizontal row — add bottom, stop
         if (bottom > 0) set.add(bottom)
         return
       }
 
-      // Large multi-column flex-row (sidebar body, two-column lower section, etc.)
-      // Collect the TOP of each direct section child within each column.
-      // This gives section-level break candidates without going too deep.
+      // Large multi-column section — collect section-level tops from every column
       Array.from(el.children).forEach((col) => {
         Array.from((col as HTMLElement).children).forEach((section) => {
           const top = Math.round((section as HTMLElement).getBoundingClientRect().top - cloneTop)
           if (top > 10) set.add(top)
         })
       })
-
-      // Bottom of the entire flex-row is also a valid break point
       if (bottom > 0) set.add(bottom)
       return
     }
 
-    // Block / flex-column: each child's top is a candidate; recurse
+    // Stacked layout — add each child's top; recurse only into tall children
     Array.from(el.children).forEach((child) => {
-      const c = child as HTMLElement
-      const top = Math.round(c.getBoundingClientRect().top - cloneTop)
+      const c    = child as HTMLElement
+      const cr   = c.getBoundingClientRect()
+      const top  = Math.round(cr.top - cloneTop)
+      const ch   = Math.round(cr.bottom - cr.top)
       if (top > 10) set.add(top)
-      walk(c)
+      if (ch > 40) walk(c)        // skip small leaf entries (certs, refs, edu rows…)
     })
   }
 
