@@ -170,6 +170,7 @@ const plans = [
       'Job search integration',
     ],
     cta: 'Start Free Trial',
+    trial: 'Free for 14 days · then $9/month · cancel anytime',
     href: '/register?plan=pro',
     popular: true,
     cardClass:
@@ -651,6 +652,11 @@ export default function LandingPage() {
                   >
                     {plan.cta}
                   </Link>
+                  {'trial' in plan && plan.trial && (
+                    <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-2">
+                      {plan.trial as string}
+                    </p>
+                  )}
                 </div>
               </FadeUp>
             ))}
