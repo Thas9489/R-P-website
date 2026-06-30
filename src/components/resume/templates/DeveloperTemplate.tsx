@@ -350,12 +350,13 @@ export function DeveloperTemplate({ resumeData }: Props) {
         <div style={{ flex: 1, padding: '20px 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* Experience */}
           {experience.length > 0 && (
-            <div>
+            <div data-pdf-break>
               <SectionTitle color={DARK_BG}>experience</SectionTitle>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {experience.map((exp) => (
                   <div
                     key={exp.id}
+                    data-pdf-break
                     style={{
                       background: '#fff',
                       borderRadius: 6,
@@ -403,7 +404,7 @@ export function DeveloperTemplate({ resumeData }: Props) {
 
           {/* Projects */}
           {projects.length > 0 && (
-            <div>
+            <div data-pdf-break>
               <SectionTitle color={DARK_BG}>repositories</SectionTitle>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {projects.map((proj, i) => (

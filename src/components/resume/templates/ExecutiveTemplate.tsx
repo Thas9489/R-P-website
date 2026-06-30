@@ -125,7 +125,7 @@ export function ExecutiveTemplate({ resumeData }: Props) {
 
       {/* Summary */}
       {(summary || personalInfo.summary) && (
-        <div style={{ marginBottom: 18 }}>
+        <div data-pdf-break style={{ marginBottom: 18 }}>
           <SectionHeader title="Executive Summary" />
           <p style={{ fontSize: 11, lineHeight: 1.7, color: '#222', margin: 0, textAlign: 'justify' }}>
             {summary || personalInfo.summary}
@@ -135,11 +135,11 @@ export function ExecutiveTemplate({ resumeData }: Props) {
 
       {/* Experience */}
       {experience.length > 0 && (
-        <div style={{ marginBottom: 18 }}>
+        <div data-pdf-break style={{ marginBottom: 18 }}>
           <SectionHeader title="Professional Experience" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {experience.map((exp) => (
-              <div key={exp.id}>
+              <div key={exp.id} data-pdf-break>
                 <div
                   style={{
                     display: 'flex',
@@ -195,7 +195,7 @@ export function ExecutiveTemplate({ resumeData }: Props) {
 
       {/* Core Competencies / Skills */}
       {skills.length > 0 && (
-        <div style={{ marginBottom: 18 }}>
+        <div data-pdf-break style={{ marginBottom: 18 }}>
           <SectionHeader title="Core Competencies" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             {Object.entries(skillsByCategory).map(([cat, names]) => (
@@ -219,7 +219,7 @@ export function ExecutiveTemplate({ resumeData }: Props) {
       )}
 
       {/* Two column lower */}
-      <div style={{ display: 'flex', gap: 36 }}>
+      <div data-pdf-break style={{ display: 'flex', gap: 36 }}>
         <div style={{ flex: 1 }}>
           {/* Education */}
           {education.length > 0 && (

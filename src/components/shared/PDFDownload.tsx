@@ -39,76 +39,21 @@ function LoadingSpinner() {
 }
 
 /**
- * Detect whether el's children are arranged side-by-side (horizontal layout).
- * We check geometry rather than CSS because React inline styles on cloned
- * elements can have unreliable computed values.
- * Rule: if first and last child share nearly the same top coordinate they
- * are sitting next to each other (flex-row / multi-column).
- */
-function isSideBySide(el: HTMLElement): boolean {
-  const kids = Array.from(el.children) as HTMLElement[]
-  if (kids.length < 2) return false
-  const t0 = kids[0].getBoundingClientRect().top
-  const tN = kids[kids.length - 1].getBoundingClientRect().top
-  return Math.abs(tN - t0) < 15          // within 15 px → side-by-side
-}
-
-/**
- * Walk the DOM and collect page-break candidates.
+ * Collect page-break candidates from elements explicitly marked by templates.
  *
- * SIDE-BY-SIDE (horizontal) containers — detected by geometry:
- *   ≤ 50 px tall  → atomic row (date line, contact strip…).
- *                   Add its bottom as a candidate; stop recursing.
- *   > 50 px tall  → multi-column section (sidebar body, two-column lower…).
- *                   Go ONE level into each column and add the TOP of every
- *                   direct section child.  Never recurse deeper, which
- *                   prevents cuts inside individual entries.
- *
- * STACKED (vertical) containers:
- *   Add each child's top as a candidate, then recurse — but ONLY into
- *   children taller than 40 px.  This stops the walker from diving into
- *   small leaf entries (a 2-line reference card, a cert row) and adding
- *   their sub-element tops as cut points.
+ * Templates add data-pdf-break="before" to any element whose TOP is a safe
+ * cut point (i.e. we may start a new page there).  This avoids all DOM
+ * geometry guessing and gives each template full control over where breaks
+ * are allowed — critical for multi-column layouts where a geometric cut
+ * would slice through the other column's content mid-entry.
  */
 function collectSafeBreaks(root: HTMLElement, cloneTop: number): number[] {
   const set = new Set<number>([0])
-
-  function walk(el: HTMLElement) {
-    const rect = el.getBoundingClientRect()
-    const h    = Math.round(rect.bottom - rect.top)
-
-    if (isSideBySide(el)) {
-      const bottom = Math.round(rect.bottom - cloneTop)
-
-      if (h <= 50) {
-        // Atomic horizontal row — add bottom, stop
-        if (bottom > 0) set.add(bottom)
-        return
-      }
-
-      // Large multi-column section — collect section-level tops from every column
-      Array.from(el.children).forEach((col) => {
-        Array.from((col as HTMLElement).children).forEach((section) => {
-          const top = Math.round((section as HTMLElement).getBoundingClientRect().top - cloneTop)
-          if (top > 10) set.add(top)
-        })
-      })
-      if (bottom > 0) set.add(bottom)
-      return
-    }
-
-    // Stacked layout — add each child's top; recurse only into tall children
-    Array.from(el.children).forEach((child) => {
-      const c    = child as HTMLElement
-      const cr   = c.getBoundingClientRect()
-      const top  = Math.round(cr.top - cloneTop)
-      const ch   = Math.round(cr.bottom - cr.top)
-      if (top > 10) set.add(top)
-      if (ch > 40) walk(c)        // skip small leaf entries (certs, refs, edu rows…)
-    })
-  }
-
-  walk(root)
+  const markers = root.querySelectorAll('[data-pdf-break]')
+  markers.forEach((el) => {
+    const top = Math.round((el as HTMLElement).getBoundingClientRect().top - cloneTop)
+    if (top > 10) set.add(top)
+  })
   return Array.from(set).sort((a, b) => a - b)
 }
 

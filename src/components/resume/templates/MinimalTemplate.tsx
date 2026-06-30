@@ -13,6 +13,7 @@ function HR() {
 function SectionTitle({ children }: { children: string }) {
   return (
     <div
+      data-pdf-break
       style={{
         fontSize: 10.5,
         fontWeight: 700,
@@ -135,7 +136,7 @@ export function MinimalTemplate({ resumeData }: Props) {
           <SectionTitle>Experience</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {experience.map((exp) => (
-              <div key={exp.id}>
+              <div key={exp.id} data-pdf-break>
                 <div
                   style={{
                     display: 'flex',
@@ -192,7 +193,7 @@ export function MinimalTemplate({ resumeData }: Props) {
           <SectionTitle>Education</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {education.map((edu) => (
-              <div key={edu.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <div key={edu.id} data-pdf-break style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <div>
                   <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'Georgia, serif' }}>
                     {edu.degree} in {edu.field}
@@ -252,7 +253,7 @@ export function MinimalTemplate({ resumeData }: Props) {
           <SectionTitle>Projects</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {projects.map((proj) => (
-              <div key={proj.id}>
+              <div key={proj.id} data-pdf-break>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'Georgia, serif' }}>
                     {proj.name}
@@ -282,7 +283,7 @@ export function MinimalTemplate({ resumeData }: Props) {
           <SectionTitle>Certifications</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
             {certifications.map((cert) => (
-              <div key={cert.id} style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div key={cert.id} data-pdf-break style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 10.5, fontWeight: 600 }}>
                   {cert.name}{' '}
                   <span style={{ fontWeight: 400, color: '#555' }}>— {cert.issuer}</span>
@@ -301,7 +302,7 @@ export function MinimalTemplate({ resumeData }: Props) {
           <SectionTitle>Awards</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
             {awards.map((award) => (
-              <div key={award.id} style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div key={award.id} data-pdf-break style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 10.5, fontWeight: 600 }}>
                   {award.title}{' '}
                   <span style={{ fontWeight: 400, color: '#555' }}>— {award.issuer}</span>
@@ -320,7 +321,7 @@ export function MinimalTemplate({ resumeData }: Props) {
           <SectionTitle>References</SectionTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {references.map((ref) => (
-              <div key={ref.id}>
+              <div key={ref.id} data-pdf-break>
                 <div style={{ fontSize: 10.5, fontWeight: 600 }}>
                   {ref.name}{' '}
                   <span style={{ fontWeight: 400, color: '#555' }}>— {ref.title}, {ref.company}</span>

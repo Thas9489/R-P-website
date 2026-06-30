@@ -251,7 +251,7 @@ export function ModernTemplate({ resumeData }: Props) {
       <div style={{ width: '65%', padding: '28px 22px', display: 'flex', flexDirection: 'column', gap: 20 }}>
         {/* Summary */}
         {(summary || personalInfo.summary) && (
-          <div>
+          <div data-pdf-break>
             <SectionHeader title="Professional Summary" />
             <p style={{ fontSize: 11, color: '#444', lineHeight: 1.6, margin: 0 }}>
               {summary || personalInfo.summary}
@@ -261,11 +261,11 @@ export function ModernTemplate({ resumeData }: Props) {
 
         {/* Experience */}
         {experience.length > 0 && (
-          <div>
+          <div data-pdf-break>
             <SectionHeader title="Experience" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {experience.map((exp) => (
-                <div key={exp.id}>
+                <div key={exp.id} data-pdf-break>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{exp.position}</div>
@@ -298,11 +298,11 @@ export function ModernTemplate({ resumeData }: Props) {
 
         {/* Education */}
         {education.length > 0 && (
-          <div>
+          <div data-pdf-break>
             <SectionHeader title="Education" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {education.map((edu) => (
-                <div key={edu.id}>
+                <div key={edu.id} data-pdf-break>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>
@@ -330,11 +330,11 @@ export function ModernTemplate({ resumeData }: Props) {
 
         {/* Projects */}
         {projects.length > 0 && (
-          <div>
+          <div data-pdf-break>
             <SectionHeader title="Projects" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {projects.map((proj) => (
-                <div key={proj.id}>
+                <div key={proj.id} data-pdf-break>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{proj.name}</div>
                     <div style={{ display: 'flex', gap: 8 }}>
@@ -377,7 +377,7 @@ export function ModernTemplate({ resumeData }: Props) {
 
         {/* Awards */}
         {awards.length > 0 && (
-          <div>
+          <div data-pdf-break>
             <SectionHeader title="Awards" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {awards.map((award) => (
@@ -400,11 +400,11 @@ export function ModernTemplate({ resumeData }: Props) {
 
         {/* References */}
         {references.length > 0 && (
-          <div>
+          <div data-pdf-break>
             <SectionHeader title="References" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {references.map((ref) => (
-                <div key={ref.id}>
+                <div key={ref.id} data-pdf-break>
                   <div style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{ref.name}</div>
                   <div style={{ fontSize: 11, color: BLUE, fontWeight: 500 }}>{ref.title}, {ref.company}</div>
                   {ref.relationship && <div style={{ fontSize: 10, color: '#666' }}>{ref.relationship}</div>}

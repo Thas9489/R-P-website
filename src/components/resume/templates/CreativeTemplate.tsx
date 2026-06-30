@@ -156,6 +156,7 @@ export function CreativeTemplate({ resumeData }: Props) {
         {/* Summary */}
         {(summary || personalInfo.summary) && (
           <div
+            data-pdf-break
             style={{
               background: '#fff',
               borderRadius: 8,
@@ -174,6 +175,7 @@ export function CreativeTemplate({ resumeData }: Props) {
         {/* Experience */}
         {experience.length > 0 && (
           <div
+            data-pdf-break
             style={{
               background: '#fff',
               borderRadius: 8,
@@ -186,6 +188,7 @@ export function CreativeTemplate({ resumeData }: Props) {
               {experience.map((exp, i) => (
                 <div
                   key={exp.id}
+                  data-pdf-break
                   style={{
                     paddingLeft: 12,
                     borderLeft: `2px solid ${COLORS[(i + 1) % COLORS.length]}`,
@@ -221,7 +224,7 @@ export function CreativeTemplate({ resumeData }: Props) {
         )}
 
         {/* Two-column lower */}
-        <div style={{ display: 'flex', gap: 16 }}>
+        <div data-pdf-break style={{ display: 'flex', gap: 16 }}>
           {/* Left: Education + Certs */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
             {education.length > 0 && (
