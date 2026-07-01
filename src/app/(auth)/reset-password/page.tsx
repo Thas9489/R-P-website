@@ -37,22 +37,29 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     const supabase = createBrowserClient()
 
-    // Supabase fires PASSWORD_RECOVERY when the user lands with a valid reset token in the URL hash
+    // PKCE flow (Supabase default): reset link delivers ?code= in the URL
+    const code = new URLSearchParams(window.location.search).get('code')
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+        setPageState(error ? 'invalid' : 'ready')
+      })
+      return
+    }
+
+    // Legacy implicit flow: token arrives in the URL hash and fires PASSWORD_RECOVERY
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setPageState('ready')
-      }
+      if (event === 'PASSWORD_RECOVERY') setPageState('ready')
     })
 
-    // Also check if session already exists (token exchanged automatically)
+    // If the user already has an active recovery session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setPageState('ready')
     })
 
-    // If nothing fires within 3 seconds, the link is invalid or expired
+    // If nothing resolves in 4 s, the link is invalid or expired
     const timeout = setTimeout(() => {
       setPageState((prev) => (prev === 'loading' ? 'invalid' : prev))
-    }, 3000)
+    }, 4000)
 
     return () => {
       subscription.unsubscribe()
