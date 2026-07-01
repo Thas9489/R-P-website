@@ -726,21 +726,12 @@ export default function LandingPage() {
                 { label: 'Features', href: '#features' },
                 { label: 'Pricing', href: '#pricing' },
                 { label: 'Login', href: '/login' },
-                {
-                  label: 'GitHub',
-                  href: 'https://github.com',
-                  icon: <Github size={14} className="inline-block -mt-0.5" />,
-                  external: true,
-                },
               ].map((link) => (
                 <a
                   key={link.label}
                   href={link.href}
-                  target={link.external ? '_blank' : undefined}
-                  rel={link.external ? 'noopener noreferrer' : undefined}
-                  className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors duration-200"
+                  className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors duration-200"
                 >
-                  {link.icon}
                   {link.label}
                 </a>
               ))}
